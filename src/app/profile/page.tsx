@@ -2,6 +2,10 @@
 
 import { cn } from "@/lib/cn";
 import {
+  getTrainingProfileAction,
+  upsertTrainingProfileAction,
+} from "@/app/actions/training-profile";
+import {
   getTrainingProfileFromStorage,
   isValidTrainingProfile,
   saveTrainingProfileToStorage,
@@ -26,18 +30,39 @@ export default function ProfilePage() {
   const [goal, setGoal] = useState<TrainingGoal>("maintain");
   const [eventNote, setEventNote] = useState("");
 
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
   useEffect(() => {
-    const p = getTrainingProfileFromStorage();
-    if (!p) return;
-    queueMicrotask(() => {
-      setBodyWeightLbs(String(p.bodyWeightLbs));
-      setAge(String(p.age));
-      setGoal(p.goal);
-      setEventNote(p.eventNote ?? "");
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await getTrainingProfileAction();
+        const initial = remote ?? getTrainingProfileFromStorage();
+        if (cancelled || !initial) return;
+        queueMicrotask(() => {
+          setBodyWeightLbs(String(initial.bodyWeightLbs));
+          setAge(String(initial.age));
+          setGoal(initial.goal);
+          setEventNote(initial.eventNote ?? "");
+        });
+      } catch {
+        const local = getTrainingProfileFromStorage();
+        if (cancelled || !local) return;
+        queueMicrotask(() => {
+          setBodyWeightLbs(String(local.bodyWeightLbs));
+          setAge(String(local.age));
+          setGoal(local.goal);
+          setEventNote(local.eventNote ?? "");
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const save = () => {
+  const save = async () => {
+    setSaveErr(null);
     const w = parseFloat(bodyWeightLbs);
     const a = parseInt(age, 10);
     const draft: TrainingProfile = {
@@ -47,6 +72,12 @@ export default function ProfilePage() {
       eventNote: goal === "event" ? eventNote.trim() || undefined : undefined,
     };
     if (!isValidTrainingProfile(draft)) {
+      return;
+    }
+    try {
+      await upsertTrainingProfileAction(draft);
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "Could not save to server.");
       return;
     }
     saveTrainingProfileToStorage(draft);
@@ -128,7 +159,7 @@ export default function ProfilePage() {
       <button
         type="button"
         disabled={!canSave}
-        onClick={save}
+        onClick={() => void save()}
         className={cn(
           "mt-8 w-full rounded-2xl bg-emerald-500 py-4 text-lg font-semibold text-zinc-950",
           "disabled:opacity-40",
@@ -136,6 +167,11 @@ export default function ProfilePage() {
       >
         Save & continue
       </button>
+      {saveErr ? (
+        <p className="mt-4 text-sm text-red-400" role="alert">
+          {saveErr}
+        </p>
+      ) : null}
     </main>
   );
 }

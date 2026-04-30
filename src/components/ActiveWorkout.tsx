@@ -9,12 +9,12 @@ import {
   swapExercise,
 } from "@/app/actions/workout";
 import type { WorkoutDetailDto } from "@/lib/db-types";
-import { getTrainingProfileFromStorage } from "@/lib/training-profile-storage";
+import { loadTrainingProfileMerged } from "@/lib/training-profile-load";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { exerciseGifFallbackUrl } from "@/lib/exercise-gif-fallback";
 import { ABS_FINISHER_REST_SEC } from "@/lib/abs-finisher";
 import { DEFAULT_REST_BETWEEN_SETS_SEC } from "@/lib/rest-constants";
-import type { ExerciseRow, LiftHistoryEntry } from "@/lib/types";
+import type { ExerciseRow, LiftHistoryEntry, TrainingProfile } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
@@ -58,7 +58,21 @@ type Props = {
 
 export function ActiveWorkout({ workout }: Props) {
   const router = useRouter();
-  const profilePayload = getTrainingProfileFromStorage();
+  const [profilePayload, setProfilePayload] = useState<TrainingProfile | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTrainingProfileMerged().then((p) => {
+      if (!cancelled) setProfilePayload(p ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolveProfile = useCallback(async () => {
+    return profilePayload ?? (await loadTrainingProfileMerged());
+  }, [profilePayload]);
   const sorted = useMemo(() => sortWorkout(workout), [workout]);
   const cursor = useMemo(() => findFirstIncomplete(sorted), [sorted]);
   const [logOpen, setLogOpen] = useState(false);
@@ -435,7 +449,7 @@ export function ActiveWorkout({ workout }: Props) {
                     onClick={() => {
                       if (!we?.id) return;
                       startTransition(async () => {
-                        await swapExercise(we.id, ex.id, profilePayload);
+                        await swapExercise(we.id, ex.id, await resolveProfile());
                         setSwapOpen(false);
                         refresh();
                       });
@@ -512,7 +526,7 @@ export function ActiveWorkout({ workout }: Props) {
                 onClick={() => {
                   if (!pickId || !we?.id) return;
                   startTransition(async () => {
-                    await attachExerciseToWorkoutExercise(we.id, pickId, profilePayload);
+                    await attachExerciseToWorkoutExercise(we.id, pickId, await resolveProfile());
                     setMapOpen(false);
                     setPickId("");
                     refresh();

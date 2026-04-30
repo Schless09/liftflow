@@ -2,11 +2,17 @@
 
 import { cn } from "@/lib/cn";
 import { summarizeRecentForPrompt, titleCaseGroup } from "@/lib/muscle-format";
-import { getTrainingProfileFromStorage } from "@/lib/training-profile-storage";
-import type { Feeling, GeneratedPlanResponse, WorkoutDurationMinutes, WorkoutRecencyContext } from "@/lib/types";
+import { loadTrainingProfileMerged } from "@/lib/training-profile-load";
+import type {
+  Feeling,
+  GeneratedPlanResponse,
+  TrainingProfile,
+  WorkoutDurationMinutes,
+  WorkoutRecencyContext,
+} from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const DRAFT_KEY = "liftflow:draft";
 
@@ -14,6 +20,7 @@ type Step = "feeling" | "duration" | "context";
 
 export function HomeClient() {
   const router = useRouter();
+  const [hasMounted, setHasMounted] = useState(false);
   const [step, setStep] = useState<Step>("feeling");
   const [feeling, setFeeling] = useState<Feeling | null>(null);
   const [durationMinutes, setDurationMinutes] = useState<WorkoutDurationMinutes | null>(null);
@@ -21,6 +28,21 @@ export function HomeClient() {
   const [contextLoading, setContextLoading] = useState(false);
   const [generateBusy, setGenerateBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [trainingProfile, setTrainingProfile] = useState<TrainingProfile | null | undefined>(undefined);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTrainingProfileMerged().then((p) => {
+      if (!cancelled) setTrainingProfile(p ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadContextAndAdvance = async (m: WorkoutDurationMinutes) => {
     setErr(null);
@@ -57,7 +79,10 @@ export function HomeClient() {
           focusMuscleGroups: context.suggestedFocus,
           recentMuscleSummary,
           generationMode,
-          trainingProfile: getTrainingProfileFromStorage(),
+          trainingProfile:
+            trainingProfile !== undefined
+              ? trainingProfile
+              : await loadTrainingProfileMerged(),
         }),
       });
       const json = await res.json();
@@ -97,7 +122,7 @@ export function HomeClient() {
         <>
           <h1 className="mt-2 text-3xl font-bold text-white">How are you feeling today?</h1>
           <p className="mt-2 text-zinc-400">Tap one, then choose how long you have.</p>
-          {!getTrainingProfileFromStorage() ? (
+          {hasMounted && trainingProfile === null ? (
             <p className="mt-3 text-sm text-amber-200/80">
               <Link href="/profile" className="font-medium underline underline-offset-2">
                 Set your profile

@@ -2,24 +2,7 @@ import type { TrainingProfile } from "./types";
 
 const PROFILE_KEY = "liftflow:training-profile";
 
-export function getTrainingProfileFromStorage(): TrainingProfile | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as TrainingProfile;
-    if (!isValidTrainingProfile(p)) return null;
-    return normalizeProfile(p);
-  } catch {
-    return null;
-  }
-}
-
-export function saveTrainingProfileToStorage(profile: TrainingProfile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(normalizeProfile(profile)));
-}
-
-function normalizeProfile(p: TrainingProfile): TrainingProfile {
+export function normalizeTrainingProfile(p: TrainingProfile): TrainingProfile {
   return {
     bodyWeightLbs: Math.round(p.bodyWeightLbs * 10) / 10,
     age: Math.round(p.age),
@@ -28,9 +11,26 @@ function normalizeProfile(p: TrainingProfile): TrainingProfile {
   };
 }
 
+export function getTrainingProfileFromStorage(): TrainingProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as TrainingProfile;
+    if (!isValidTrainingProfile(p)) return null;
+    return normalizeTrainingProfile(p);
+  } catch {
+    return null;
+  }
+}
+
+export function saveTrainingProfileToStorage(profile: TrainingProfile): void {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(normalizeTrainingProfile(profile)));
+}
+
 export function parseTrainingProfileJson(data: unknown): TrainingProfile | null {
   if (!isValidTrainingProfile(data)) return null;
-  return normalizeProfile(data);
+  return normalizeTrainingProfile(data);
 }
 
 export function isValidTrainingProfile(p: unknown): p is TrainingProfile {

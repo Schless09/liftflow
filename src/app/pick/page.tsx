@@ -3,7 +3,7 @@
 import { createWorkoutFromPlan } from "@/app/actions/workout";
 import { WorkoutCard } from "@/components/WorkoutCard";
 import { titleCaseGroup } from "@/lib/muscle-format";
-import { getTrainingProfileFromStorage } from "@/lib/training-profile-storage";
+import { loadTrainingProfileMerged } from "@/lib/training-profile-load";
 import type { Feeling, GeneratedWorkout, WorkoutDurationMinutes } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -87,11 +87,12 @@ export default function PickPage() {
             disabled={pending}
             onSelect={() => {
               startTransition(async () => {
+                const profile = await loadTrainingProfileMerged();
                 await createWorkoutFromPlan(
                   draft.feeling,
                   normalizeDuration(draft.durationMinutes),
                   w,
-                  getTrainingProfileFromStorage(),
+                  profile,
                 );
               });
             }}

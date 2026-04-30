@@ -3,6 +3,7 @@ import { summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
 import { getWorkoutRecencyContext } from "@/lib/workout-recency-context";
 import type { Feeling, WorkoutDurationMinutes } from "@/lib/types";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 function parseDuration(v: unknown): WorkoutDurationMinutes | null {
@@ -25,6 +26,11 @@ function parseGenerationMode(v: unknown): "rotation" | "balanced" {
 
 export async function POST(req: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const feeling = body?.feeling as Feeling | undefined;
     if (feeling !== "strong" && feeling !== "meh" && feeling !== "tired") {

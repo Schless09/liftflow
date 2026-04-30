@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { titleCaseGroup } from "@/lib/muscle-format";
 import type { RecentWorkoutSummary, WorkoutRecencyContext } from "@/lib/types";
 
@@ -16,7 +16,7 @@ function countMuscleHits(
 }
 
 export async function getWorkoutRecencyContext(): Promise<WorkoutRecencyContext> {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data: allMuscleRows } = await supabase.from("exercises").select("muscle_group");
   const universe = [

@@ -5,7 +5,9 @@ import { resolveExercise } from "@/lib/exercise-resolve";
 import { nextPlannedWeight } from "@/lib/progression";
 import { suggestWorkingWeight } from "@/lib/suggest-working-weight";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { auth } from "@clerk/nextjs/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ExerciseRow,
   Feeling,
@@ -25,7 +27,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 async function fetchLastSession(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: SupabaseClient,
   exerciseId: string,
 ): Promise<{ weight: number; reps: number } | null> {
   const { data: weRows } = await supabase.from("workout_exercises").select("id").eq("exercise_id", exerciseId);
@@ -58,7 +60,10 @@ export async function createWorkoutFromPlan(
   plan: GeneratedWorkout,
   trainingProfilePayload?: unknown,
 ) {
-  const supabase = createServerClient();
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const supabase = await createServerSupabaseClient();
   const profile = parseTrainingProfileJson(trainingProfilePayload ?? null);
 
   const { data: exerciseRows, error: exErr } = await supabase.from("exercises").select("*");
@@ -68,7 +73,12 @@ export async function createWorkoutFromPlan(
 
   let workoutRes = await supabase
     .from("workouts")
-    .insert({ feeling, name: plan.name, duration_minutes: durationMinutes })
+    .insert({
+      feeling,
+      name: plan.name,
+      duration_minutes: durationMinutes,
+      user_id: userId,
+    })
     .select("id")
     .single();
 
@@ -78,7 +88,7 @@ export async function createWorkoutFromPlan(
   ) {
     workoutRes = await supabase
       .from("workouts")
-      .insert({ feeling, name: plan.name })
+      .insert({ feeling, name: plan.name, user_id: userId })
       .select("id")
       .single();
   }
@@ -151,7 +161,7 @@ export async function attachExerciseToWorkoutExercise(
   exerciseId: string,
   trainingProfilePayload?: unknown,
 ) {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
   const profile = parseTrainingProfileJson(trainingProfilePayload ?? null);
   const { data: ex, error: exErr } = await supabase
     .from("exercises")
@@ -210,7 +220,7 @@ export async function attachExerciseToWorkoutExercise(
 
 /** Last `limit` completed sets for this canonical exercise (any workout), newest first. */
 export async function fetchLiftHistory(exerciseId: string, limit = 5): Promise<LiftHistoryEntry[]> {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
   const { data: weList, error: weErr } = await supabase
     .from("workout_exercises")
     .select("id")
@@ -262,7 +272,7 @@ export async function fetchLiftHistory(exerciseId: string, limit = 5): Promise<L
 }
 
 export async function fetchSwapAlternatives(exerciseId: string): Promise<ExerciseRow[]> {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
   const { data: self } = await supabase.from("exercises").select("muscle_group").eq("id", exerciseId).single();
   if (!self?.muscle_group) return [];
 
@@ -287,7 +297,7 @@ export async function swapExercise(
 }
 
 export async function appendAbsFinisher(workoutId: string, minutes: 5 | 8) {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
   const plan = minutes === 5 ? ABS_FINISHER_5_MIN : ABS_FINISHER_8_MIN;
   const names = [...plan];
 
@@ -353,7 +363,7 @@ export async function completeSetAndProgress(params: {
   actualWeight: number;
   actualReps: number;
 }) {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
   const now = new Date().toISOString();
 
   await supabase
@@ -465,7 +475,7 @@ function buildFinishSummary(
 }
 
 export async function finishWorkout(workoutId: string): Promise<FinishWorkoutSummary> {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data: weIds } = await supabase.from("workout_exercises").select("id").eq("workout_id", workoutId);
   const ids = weIds?.map((r) => r.id) ?? [];

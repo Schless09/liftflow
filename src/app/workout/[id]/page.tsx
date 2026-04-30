@@ -1,11 +1,11 @@
 import { ActiveWorkout } from "@/components/ActiveWorkout";
 import type { WorkoutDetailDto } from "@/lib/db-types";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 
 export default async function WorkoutSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
     .from("workouts")

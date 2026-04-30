@@ -65,7 +65,7 @@ export default function PickPage() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="mb-4 self-start text-sm text-zinc-500"
+        className="mb-4 flex min-h-11 items-center self-start text-sm text-zinc-500 touch-manipulation py-2"
       >
         ← Back
       </button>

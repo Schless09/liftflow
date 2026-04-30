@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { repRangeIsTimeBased } from "@/lib/rep-range";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { LiftHistoryEntry } from "@/lib/types";
 import { useState } from "react";
 
@@ -51,13 +53,17 @@ export function ExerciseView({
 }: Props) {
   const [gifOpen, setGifOpen] = useState(false);
   const [tab, setTab] = useState<StatsTab>("current");
+  const timeBased = repRangeIsTimeBased(repRange);
+
+  useEscapeKey(gifOpen, () => setGifOpen(false));
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-bold leading-tight text-white">{title}</h1>
         <p className="mt-1 text-zinc-400">
-          Set {setIndex} / {totalSets} · {repRange} reps
+          Set {setIndex} / {totalSets} · {repRange}
+          {timeBased ? "" : " reps"}
         </p>
         {lastLine ? <p className="mt-2 text-sm font-medium text-emerald-400/90">{lastLine}</p> : null}
       </div>
@@ -68,11 +74,26 @@ export function ExerciseView({
           gifUrl ? "cursor-pointer" : "",
         )}
         onClick={() => gifUrl && setGifOpen(true)}
+        onKeyDown={(e) => {
+          if (!gifUrl) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setGifOpen(true);
+          }
+        }}
         role={gifUrl ? "button" : undefined}
+        tabIndex={gifUrl ? 0 : undefined}
+        aria-label={gifUrl ? `View ${title} demo full screen` : undefined}
       >
         {gifUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- external GIF URLs from DB
-          <img src={gifUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
+          <img
+            src={gifUrl}
+            alt={`${title} demonstration`}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-contain"
+          />
         ) : (
           <span className="text-sm text-zinc-500">No demo image</span>
         )}
@@ -82,11 +103,16 @@ export function ExerciseView({
       {gifOpen && gifUrl ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-30 flex cursor-default items-center justify-center bg-black/90 p-4"
+          aria-label="Close demo"
           onClick={() => setGifOpen(false)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={gifUrl} alt="" className="max-h-full max-w-full object-contain" />
+          <img
+            src={gifUrl}
+            alt={`${title} demonstration`}
+            className="pointer-events-none max-h-full max-w-full object-contain"
+          />
         </button>
       ) : null}
 
@@ -130,9 +156,12 @@ export function ExerciseView({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-zinc-500">Reps (target)</p>
+                <p className="text-xs text-zinc-500">
+                  {timeBased ? "Time / hold (target)" : "Reps (target)"}
+                </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
                   {plannedReps != null ? plannedReps : "—"}
+                  {timeBased ? <span className="text-base font-normal text-zinc-500"> sec</span> : null}
                 </p>
               </div>
             </div>
@@ -173,6 +202,7 @@ export function ExerciseView({
       <button
         type="button"
         onClick={onDone}
+        aria-label={`Log set ${setIndex} of ${totalSets} for ${title}`}
         className={cn(
           "w-full rounded-2xl bg-emerald-500 py-5 text-xl font-bold text-zinc-950",
           "touch-manipulation active:bg-emerald-400",

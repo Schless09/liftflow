@@ -23,6 +23,7 @@ import { ExerciseView } from "./ExerciseView";
 import { RestTimer } from "./RestTimer";
 import { SetLogger } from "./SetLogger";
 import { WorkoutProgressRing } from "./WorkoutProgressRing";
+import { useEscapeKey } from "@/lib/use-escape-key";
 
 type Cursor = { weIndex: number; setIdx: number };
 
@@ -113,6 +114,12 @@ export function ActiveWorkout({ workout }: Props) {
     startTransition(() => router.refresh());
   }, [router, startTransition]);
 
+  useEscapeKey(swapOpen, () => setSwapOpen(false));
+  useEscapeKey(mapOpen, () => {
+    setMapOpen(false);
+    setPickId("");
+  });
+
   const we = cursor != null ? sorted.workout_exercises[cursor.weIndex] : null;
   const setRow = we && cursor ? we.sets[cursor.setIdx] : null;
 
@@ -191,7 +198,12 @@ export function ActiveWorkout({ workout }: Props) {
   }, [sorted.id, cursor]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pb-10 pt-6">
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col px-4 pt-6",
+        restOpen ? "pb-24" : "pb-10",
+      )}
+    >
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-wider text-zinc-500">{sorted.name}</p>
@@ -398,9 +410,16 @@ export function ActiveWorkout({ workout }: Props) {
       ) : null}
 
       {swapOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center">
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="swap-sheet-title"
+        >
           <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-zinc-900 p-6 sm:rounded-3xl">
-            <p className="text-lg font-semibold text-white">Swap exercise</p>
+            <p id="swap-sheet-title" className="text-lg font-semibold text-white">
+              Swap exercise
+            </p>
             <div className="mt-4 flex flex-col gap-3">
               {alternatives.map((ex) => {
                 const altGif =
@@ -460,16 +479,24 @@ export function ActiveWorkout({ workout }: Props) {
       ) : null}
 
       {mapOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center">
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="map-sheet-title"
+        >
           <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-3xl bg-zinc-900 sm:rounded-3xl">
             <div className="border-b border-zinc-800 p-4">
-              <p className="font-semibold text-white">Choose exercise</p>
+              <p id="map-sheet-title" className="font-semibold text-white">
+                Choose exercise
+              </p>
             </div>
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
               <select
                 className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white"
                 value={pickId}
                 onChange={(e) => setPickId(e.target.value)}
+                aria-label="Exercise library"
               >
                 <option value="">Select…</option>
                 {(allExercises ?? []).map((ex) => (

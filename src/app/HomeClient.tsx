@@ -143,7 +143,10 @@ export function HomeClient() {
               setStep("feeling");
               setFeeling(null);
             }}
-            className="mt-2 self-start text-sm text-zinc-500 disabled:opacity-50"
+            className={cn(
+              "mt-2 flex min-h-11 items-center self-start text-sm text-zinc-500 disabled:opacity-50",
+              "touch-manipulation",
+            )}
           >
             ← Back
           </button>
@@ -189,7 +192,10 @@ export function HomeClient() {
               setContext(null);
               setDurationMinutes(null);
             }}
-            className="mt-2 self-start text-sm text-zinc-500 disabled:opacity-50"
+            className={cn(
+              "mt-2 flex min-h-11 items-center self-start text-sm text-zinc-500 disabled:opacity-50",
+              "touch-manipulation",
+            )}
           >
             ← Back
           </button>
@@ -272,7 +278,11 @@ export function HomeClient() {
         </>
       )}
 
-      {err ? <p className="mt-6 text-sm text-red-400">{err}</p> : null}
+      {err ? (
+        <p className="mt-6 text-sm text-red-400" role="alert">
+          {err}
+        </p>
+      ) : null}
     </main>
   );
 }

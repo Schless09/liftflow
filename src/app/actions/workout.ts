@@ -275,7 +275,7 @@ export async function fetchSwapAlternatives(exerciseId: string): Promise<Exercis
 
   const list = (alts ?? []) as ExerciseRow[];
   const shuffled = [...list].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 2);
+  return shuffled.slice(0, 3);
 }
 
 export async function swapExercise(

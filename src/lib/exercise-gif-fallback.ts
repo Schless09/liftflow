@@ -32,7 +32,9 @@ const FALLBACK: Record<string, string> = {
   "Leg Curl": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/1770-sJFIDIp.gif",
   "Hip Thrust": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/0058-SNFfUff.gif",
   "Calf Raise": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/0999-9JprnPh.gif",
-  "Plank": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/3544-5VXmnV5.gif",
+  // Forearm / front plank (not side): 3544 in dataset is "bodyweight incline side plank" — was wrong for "Plank".
+  "Plank":
+    "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/2135-VBAWRPG.gif",
   "Hanging Leg Raise": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/0472-I3tsCnC.gif",
   "Cable Crunch": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/0175-WW95auq.gif",
   "Russian Twist": "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/videos/0687-XVDdcoj.gif",

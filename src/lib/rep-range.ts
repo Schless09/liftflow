@@ -1,3 +1,8 @@
+/** True when the plan text describes time (planks, holds) rather than rep count. */
+export function repRangeIsTimeBased(repRange: string): boolean {
+  return /\b(sec|second|seconds|min|minute|minutes|hold)\b/i.test(repRange);
+}
+
 export function parseRepRange(repRange: string): { low: number; high: number } {
   const normalized = repRange.replace(/\s*to\s*/i, "-").trim();
   const parts = normalized.split(/[-–]/).map((s) => s.trim());

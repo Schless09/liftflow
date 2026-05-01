@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/cn";
 import { repRangeIsTimeBased } from "@/lib/rep-range";
-import { useEscapeKey } from "@/lib/use-escape-key";
 import type { LiftHistoryEntry } from "@/lib/types";
 import { useState } from "react";
 
@@ -51,11 +50,8 @@ export function ExerciseView({
   logHint,
   onDone,
 }: Props) {
-  const [gifOpen, setGifOpen] = useState(false);
   const [tab, setTab] = useState<StatsTab>("current");
   const timeBased = repRangeIsTimeBased(repRange);
-
-  useEscapeKey(gifOpen, () => setGifOpen(false));
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,23 +64,7 @@ export function ExerciseView({
         {lastLine ? <p className="mt-2 text-sm font-medium text-emerald-400/90">{lastLine}</p> : null}
       </div>
 
-      <div
-        className={cn(
-          "relative flex aspect-video w-full max-h-64 items-center justify-center overflow-hidden rounded-2xl bg-zinc-800",
-          gifUrl ? "cursor-pointer" : "",
-        )}
-        onClick={() => gifUrl && setGifOpen(true)}
-        onKeyDown={(e) => {
-          if (!gifUrl) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setGifOpen(true);
-          }
-        }}
-        role={gifUrl ? "button" : undefined}
-        tabIndex={gifUrl ? 0 : undefined}
-        aria-label={gifUrl ? `View ${title} demo full screen` : undefined}
-      >
+      <div className="relative flex aspect-video w-full max-h-64 items-center justify-center overflow-hidden rounded-2xl bg-zinc-800">
         {gifUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- external GIF URLs from DB
           <img
@@ -97,24 +77,7 @@ export function ExerciseView({
         ) : (
           <span className="text-sm text-zinc-500">No demo image</span>
         )}
-        {gifUrl ? <span className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white">Tap</span> : null}
       </div>
-
-      {gifOpen && gifUrl ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-30 flex cursor-default items-center justify-center bg-black/90 p-4"
-          aria-label="Close demo"
-          onClick={() => setGifOpen(false)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={gifUrl}
-            alt={`${title} demonstration`}
-            className="pointer-events-none max-h-full max-w-full object-contain"
-          />
-        </button>
-      ) : null}
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
         {hasMappedExercise ? (

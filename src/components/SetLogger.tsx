@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 import { primeRestAlertAudio } from "@/lib/rest-alert-audio";
 import { parseRepRange, repRangeIsTimeBased } from "@/lib/rep-range";
 import { useEscapeKey } from "@/lib/use-escape-key";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const WEIGHT_STEP = 5;
 const WEIGHT_MAX = 2000;
@@ -16,6 +16,10 @@ type Props = {
   onClose: () => void;
   repRange: string;
   defaultWeight: number;
+  /** When set, initial reps use this instead of rep-range midpoint (e.g. editing a logged set). */
+  initialRepsOverride?: number | null;
+  sheetTitle?: string;
+  saveButtonLabel?: string;
   onLog: (payload: { weight: number; reps: number }) => void;
 };
 
@@ -39,7 +43,16 @@ function parseWeightInput(s: string): number {
   return clampWeight(n);
 }
 
-export function SetLogger({ open, onClose, repRange, defaultWeight, onLog }: Props) {
+export function SetLogger({
+  open,
+  onClose,
+  repRange,
+  defaultWeight,
+  initialRepsOverride,
+  sheetTitle = "Log this set",
+  saveButtonLabel = "Save",
+  onLog,
+}: Props) {
   const { low, high } = parseRepRange(repRange);
   const mid = Math.round((low + high) / 2);
   const timeBased = repRangeIsTimeBased(repRange);
@@ -64,6 +77,18 @@ export function SetLogger({ open, onClose, repRange, defaultWeight, onLog }: Pro
   const [weightDraft, setWeightDraft] = useState<string | null>(null);
   const [repsVal, setRepsVal] = useState(mid);
   const [repsDraft, setRepsDraft] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setWeightVal(clampWeight(Number(defaultWeight) || 0));
+    setWeightDraft(null);
+    const r =
+      initialRepsOverride != null && Number.isFinite(Number(initialRepsOverride))
+        ? clampRepsVal(Number(initialRepsOverride))
+        : mid;
+    setRepsVal(r);
+    setRepsDraft(null);
+  }, [open, defaultWeight, initialRepsOverride, mid, repRange]);
 
   const resetAndClose = useCallback(() => {
     setWeightVal(clampWeight(Number(defaultWeight) || 0));
@@ -116,7 +141,7 @@ export function SetLogger({ open, onClose, repRange, defaultWeight, onLog }: Pro
     >
       <div className="w-full max-w-lg rounded-t-3xl bg-zinc-900 p-6 shadow-xl sm:rounded-3xl">
         <h2 id="set-logger-title" className="text-center text-lg font-medium text-white">
-          Log this set
+          {sheetTitle}
         </h2>
         <p className="mt-2 text-center text-sm text-zinc-400">
           Use − / + or tap a number to type (e.g. 17.5 lb), then Save.
@@ -232,7 +257,7 @@ export function SetLogger({ open, onClose, repRange, defaultWeight, onLog }: Pro
           )}
           onClick={save}
         >
-          Save
+          {saveButtonLabel}
         </button>
         <button
           type="button"

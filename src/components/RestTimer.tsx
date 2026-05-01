@@ -11,8 +11,8 @@ import { useEscapeKey } from "@/lib/use-escape-key";
 import { useEffect, useRef, useState } from "react";
 
 const REST_ADJUST_SEC = 15;
-/** Matches server clamp in workout actions (never plan below 30s). */
-const MIN_REST_SEC = 30;
+/** Minimum rest after pressing −15 (seconds). */
+const MIN_REST_SEC = 15;
 const FINAL_BEEP_START_SEC = 5;
 
 type Props = {

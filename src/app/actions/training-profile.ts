@@ -14,6 +14,7 @@ type ProfileRow = {
   age: number;
   goal: string;
   event_note: string | null;
+  days_per_week?: number | string | null;
 };
 
 function rowToProfile(row: ProfileRow): TrainingProfile | null {
@@ -21,6 +22,10 @@ function rowToProfile(row: ProfileRow): TrainingProfile | null {
     bodyWeightLbs: Number(row.body_weight_lbs),
     age: Number(row.age),
     goal: row.goal as TrainingGoal,
+    daysPerWeek:
+      row.days_per_week != null && row.days_per_week !== ""
+        ? Number(row.days_per_week)
+        : 3,
     eventNote: row.event_note ?? undefined,
   };
   if (!isValidTrainingProfile(draft)) return null;
@@ -35,7 +40,7 @@ export async function getTrainingProfileAction(): Promise<TrainingProfile | null
     const supabase = await createServerSupabaseClient();
     const { data, error } = await supabase
       .from("training_profiles")
-      .select("body_weight_lbs, age, goal, event_note")
+      .select("body_weight_lbs, age, goal, event_note, days_per_week")
       .maybeSingle();
 
     if (error || !data) return null;
@@ -66,6 +71,7 @@ export async function upsertTrainingProfileAction(profile: TrainingProfile): Pro
       body_weight_lbs: normalized.bodyWeightLbs,
       age: normalized.age,
       goal: normalized.goal,
+      days_per_week: normalized.daysPerWeek,
       event_note: normalized.eventNote ?? null,
       updated_at: new Date().toISOString(),
     },

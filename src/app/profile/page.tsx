@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const [bodyWeightLbs, setBodyWeightLbs] = useState("");
   const [age, setAge] = useState("");
   const [goal, setGoal] = useState<TrainingGoal>("maintain");
+  const [daysPerWeek, setDaysPerWeek] = useState(3);
   const [eventNote, setEventNote] = useState("");
 
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function ProfilePage() {
           setBodyWeightLbs(String(initial.bodyWeightLbs));
           setAge(String(initial.age));
           setGoal(initial.goal);
+          setDaysPerWeek(initial.daysPerWeek);
           setEventNote(initial.eventNote ?? "");
         });
       } catch {
@@ -52,6 +54,7 @@ export default function ProfilePage() {
           setBodyWeightLbs(String(local.bodyWeightLbs));
           setAge(String(local.age));
           setGoal(local.goal);
+          setDaysPerWeek(local.daysPerWeek);
           setEventNote(local.eventNote ?? "");
         });
       }
@@ -69,6 +72,7 @@ export default function ProfilePage() {
       bodyWeightLbs: w,
       age: a,
       goal,
+      daysPerWeek,
       eventNote: goal === "event" ? eventNote.trim() || undefined : undefined,
     };
     if (!isValidTrainingProfile(draft)) {
@@ -155,6 +159,26 @@ export default function ProfilePage() {
           />
         </label>
       ) : null}
+
+      <p className="mt-6 text-sm font-medium text-zinc-300">Strength days per week</p>
+      <p className="mt-1 text-xs text-zinc-500">How many days you aim to train (for planning bias).</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {([1, 2, 3, 4, 5, 6, 7] as const).map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setDaysPerWeek(d)}
+            className={cn(
+              "min-h-12 min-w-[2.75rem] rounded-xl text-sm font-semibold touch-manipulation",
+              daysPerWeek === d
+                ? "bg-emerald-600 text-zinc-950"
+                : "bg-zinc-800 text-zinc-200 active:bg-zinc-700",
+            )}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
 
       <button
         type="button"

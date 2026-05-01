@@ -2,10 +2,13 @@
 
 import { parseRepRange } from "@/lib/rep-range";
 import { resolveExercise } from "@/lib/exercise-resolve";
+import { generateExtraLiftsForActiveSession } from "@/lib/gemini/workout-generate";
 import { nextPlannedWeight } from "@/lib/progression";
+import { summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { suggestWorkingWeight } from "@/lib/suggest-working-weight";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getWorkoutRecencyContext } from "@/lib/workout-recency-context";
 import { auth } from "@clerk/nextjs/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -14,7 +17,9 @@ import type {
   FinishWorkoutSummary,
   GeneratedWorkout,
   LiftHistoryEntry,
+  TrainingProfile,
   WorkoutDurationMinutes,
+  WorkoutExercisePlan,
 } from "@/lib/types";
 import {
   ABS_FINISHER_5_MIN,
@@ -48,6 +53,69 @@ async function fetchLastSession(
 
   if (!setRow?.actual_weight || setRow.actual_reps == null) return null;
   return { weight: Number(setRow.actual_weight), reps: Number(setRow.actual_reps) };
+}
+
+async function insertGeneratedPlanExercises(
+  supabase: SupabaseClient,
+  workoutId: string,
+  planExercises: WorkoutExercisePlan[],
+  exerciseLibrary: ExerciseRow[],
+  profile: TrainingProfile | null,
+  startOrderIndex: number,
+): Promise<void> {
+  for (let i = 0; i < planExercises.length; i++) {
+    const p = planExercises[i]!;
+    const resolved = resolveExercise(p.name, exerciseLibrary);
+
+    let exerciseId: string | null = null;
+    let unmappedName: string | null = null;
+    let last: { weight: number; reps: number } | null = null;
+
+    if (resolved.kind === "matched") {
+      exerciseId = resolved.exercise.id;
+      last = await fetchLastSession(supabase, exerciseId);
+    } else {
+      unmappedName = resolved.query;
+    }
+
+    const setCount = Math.max(1, Math.min(12, Math.round(Number(p.sets))));
+    const { low } = parseRepRange(p.rep_range);
+    const suggestedFromProfile =
+      profile && resolved.kind === "matched"
+        ? suggestWorkingWeight(profile, resolved.exercise, p.rep_range)
+        : null;
+    const baseW = last?.weight ?? suggestedFromProfile ?? null;
+
+    const { data: we, error: weErr } = await supabase
+      .from("workout_exercises")
+      .insert({
+        workout_id: workoutId,
+        exercise_id: exerciseId,
+        unmapped_name: unmappedName,
+        order_index: startOrderIndex + i,
+        sets: setCount,
+        rep_range: p.rep_range,
+        base_weight: baseW,
+        last_session_reps: last?.reps ?? null,
+        effective_rest_seconds: DEFAULT_REST_BETWEEN_SETS_SEC,
+      })
+      .select("id")
+      .single();
+
+    if (weErr || !we) throw new Error(weErr?.message ?? "Failed to add exercise");
+
+    const plannedW = baseW;
+    const setRows = Array.from({ length: setCount }, (_, idx) => ({
+      workout_exercise_id: we.id,
+      set_number: idx + 1,
+      planned_weight: plannedW,
+      planned_reps: low,
+      completed: false,
+    }));
+
+    const { error: setErr } = await supabase.from("sets").insert(setRows);
+    if (setErr) throw new Error(setErr.message);
+  }
 }
 
 function isMissingDurationColumnError(message: string): boolean {
@@ -98,62 +166,118 @@ export async function createWorkoutFromPlan(
 
   if (wErr || !workout) throw new Error(wErr?.message ?? "Failed to create workout");
 
-  for (let i = 0; i < plan.exercises.length; i++) {
-    const p = plan.exercises[i]!;
-    const resolved = resolveExercise(p.name, exercises);
-
-    let exerciseId: string | null = null;
-    let unmappedName: string | null = null;
-    let last: { weight: number; reps: number } | null = null;
-
-    if (resolved.kind === "matched") {
-      exerciseId = resolved.exercise.id;
-      last = await fetchLastSession(supabase, exerciseId);
-    } else {
-      unmappedName = resolved.query;
-    }
-
-    const setCount = Math.max(1, Math.min(12, Math.round(Number(p.sets))));
-    const { low } = parseRepRange(p.rep_range);
-    const suggestedFromProfile =
-      profile && resolved.kind === "matched"
-        ? suggestWorkingWeight(profile, resolved.exercise, p.rep_range)
-        : null;
-    const baseW = last?.weight ?? suggestedFromProfile ?? null;
-
-    const { data: we, error: weErr } = await supabase
-      .from("workout_exercises")
-      .insert({
-        workout_id: workout.id,
-        exercise_id: exerciseId,
-        unmapped_name: unmappedName,
-        order_index: i,
-        sets: setCount,
-        rep_range: p.rep_range,
-        base_weight: baseW,
-        last_session_reps: last?.reps ?? null,
-        effective_rest_seconds: DEFAULT_REST_BETWEEN_SETS_SEC,
-      })
-      .select("id")
-      .single();
-
-    if (weErr || !we) throw new Error(weErr?.message ?? "Failed to add exercise");
-
-    const plannedW = baseW;
-    const setRows = Array.from({ length: setCount }, (_, idx) => ({
-      workout_exercise_id: we.id,
-      set_number: idx + 1,
-      planned_weight: plannedW,
-      planned_reps: low,
-      completed: false,
-    }));
-
-    const { error: setErr } = await supabase.from("sets").insert(setRows);
-    if (setErr) throw new Error(setErr.message);
-  }
+  await insertGeneratedPlanExercises(
+    supabase,
+    workout.id,
+    plan.exercises,
+    exercises,
+    profile,
+    0,
+  );
 
   revalidatePath("/");
   redirect(`/workout/${workout.id}`);
+}
+
+function parseFeelingFromRow(raw: string): Feeling {
+  if (raw === "strong" || raw === "meh" || raw === "tired") return raw;
+  return "meh";
+}
+
+function normalizeWorkoutDuration(m: number | null): WorkoutDurationMinutes | null {
+  if (m === 30 || m === 45 || m === 60) return m;
+  return null;
+}
+
+type ExerciseJoinLite = { canonical_name: string; muscle_group: string };
+
+/** Supabase may type FK joins as T | T[] depending on codegen. */
+function singleExerciseJoin(
+  raw: ExerciseJoinLite | ExerciseJoinLite[] | null | undefined,
+): ExerciseJoinLite | null {
+  if (!raw) return null;
+  return Array.isArray(raw) ? raw[0] ?? null : raw;
+}
+
+export async function appendAiExtraLifts(workoutId: string, trainingProfilePayload?: unknown) {
+  const supabase = await createServerSupabaseClient();
+  const profile = parseTrainingProfileJson(trainingProfilePayload ?? null);
+
+  const { data: wrow, error: wErr } = await supabase
+    .from("workouts")
+    .select(
+      `id, feeling, duration_minutes, completed_at, workout_exercises (
+      order_index, unmapped_name, exercise_id,
+      exercises ( canonical_name, muscle_group ),
+      sets ( completed )
+    )`,
+    )
+    .eq("id", workoutId)
+    .single();
+
+  if (wErr || !wrow) throw new Error(wErr?.message ?? "Workout not found");
+  if (wrow.completed_at) throw new Error("Workout already finished");
+
+  const weList = wrow.workout_exercises ?? [];
+  const sortedWe = [...weList].sort((a, b) => a.order_index - b.order_index);
+
+  const existingExerciseNames = sortedWe.map((we) => {
+    const ex = singleExerciseJoin(we.exercises);
+    const n = ex?.canonical_name ?? we.unmapped_name;
+    return n?.trim() || "Unknown";
+  });
+
+  const sessionLines = sortedWe.map((we, idx) => {
+    const ex = singleExerciseJoin(we.exercises);
+    const name = ex?.canonical_name ?? we.unmapped_name ?? "Exercise";
+    const mg = ex?.muscle_group ?? "?";
+    const sets = we.sets ?? [];
+    const done = sets.filter((s) => s.completed).length;
+    const total = sets.length;
+    return `${idx + 1}. ${name} (${mg}) — ${done}/${total} sets logged`;
+  });
+
+  const currentSessionSummary =
+    sessionLines.length > 0 ? sessionLines.join("\n") : "No exercises yet (empty session).";
+
+  const ctx = await getWorkoutRecencyContext();
+  const recentMuscleSummary = summarizeRecentForPrompt(ctx.recent);
+
+  const feeling = parseFeelingFromRow(String(wrow.feeling));
+  const durationMinutes = normalizeWorkoutDuration(wrow.duration_minutes);
+
+  const plan = await generateExtraLiftsForActiveSession({
+    feeling,
+    durationMinutes,
+    recentMuscleSummary,
+    currentSessionSummary,
+    existingExerciseNames,
+    trainingProfile: profile,
+  });
+
+  const { data: exerciseRows, error: exErr } = await supabase.from("exercises").select("*");
+  if (exErr || !exerciseRows) throw new Error(exErr?.message ?? "Failed to load exercises");
+
+  const exercises = exerciseRows as ExerciseRow[];
+
+  const { data: orderRows } = await supabase
+    .from("workout_exercises")
+    .select("order_index")
+    .eq("workout_id", workoutId);
+
+  const maxOrder = Math.max(-1, ...(orderRows?.map((r) => r.order_index) ?? []));
+
+  await insertGeneratedPlanExercises(
+    supabase,
+    workoutId,
+    plan.exercises,
+    exercises,
+    profile,
+    maxOrder + 1,
+  );
+
+  revalidatePath(`/workout/${workoutId}`);
+  revalidatePath("/");
 }
 
 export async function attachExerciseToWorkoutExercise(
@@ -393,6 +517,27 @@ export async function completeSetAndProgress(params: {
       .eq("id", nextSet.id);
   }
 
+  revalidatePath(`/workout/${params.workoutId}`);
+}
+
+/** Fix weight/reps on an already-completed set (does not re-run progression). */
+export async function updateLoggedSet(params: {
+  setId: string;
+  workoutId: string;
+  actualWeight: number;
+  actualReps: number;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("sets")
+    .update({
+      actual_weight: params.actualWeight,
+      actual_reps: params.actualReps,
+    })
+    .eq("id", params.setId)
+    .eq("completed", true);
+
+  if (error) throw new Error(error.message);
   revalidatePath(`/workout/${params.workoutId}`);
 }
 

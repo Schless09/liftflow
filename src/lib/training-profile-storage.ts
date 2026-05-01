@@ -2,11 +2,18 @@ import type { TrainingProfile } from "./types";
 
 const PROFILE_KEY = "liftflow:training-profile";
 
-export function normalizeTrainingProfile(p: TrainingProfile): TrainingProfile {
+export function normalizeTrainingProfile(
+  p: Pick<TrainingProfile, "bodyWeightLbs" | "age" | "goal"> &
+    Partial<Pick<TrainingProfile, "daysPerWeek" | "eventNote">>,
+): TrainingProfile {
+  let days = p.daysPerWeek;
+  if (typeof days !== "number" || !Number.isFinite(days)) days = 3;
+  days = Math.min(7, Math.max(1, Math.round(days)));
   return {
     bodyWeightLbs: Math.round(p.bodyWeightLbs * 10) / 10,
     age: Math.round(p.age),
     goal: p.goal,
+    daysPerWeek: days,
     eventNote: p.eventNote?.trim() || undefined,
   };
 }
@@ -44,5 +51,10 @@ export function isValidTrainingProfile(p: unknown): p is TrainingProfile {
   if (g !== "bulk" && g !== "cut" && g !== "maintain" && g !== "recomp" && g !== "event")
     return false;
   if (g === "event" && o.eventNote != null && typeof o.eventNote !== "string") return false;
+  const d = o.daysPerWeek;
+  if (d !== undefined && d !== null) {
+    const n = Number(d);
+    if (!Number.isFinite(n) || n < 1 || n > 7) return false;
+  }
   return true;
 }

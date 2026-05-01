@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
   Feeling,
   GeneratedPlanResponse,
+  GeneratedWorkout,
   TrainingProfile,
   WorkoutDurationMinutes,
 } from "../types";
@@ -21,6 +22,10 @@ const workoutSchema = z.object({
 
 const responseSchema = z.object({
   workouts: z.array(workoutSchema).min(1),
+});
+
+const extraLiftsOnlySchema = z.object({
+  exercises: z.array(exercisePlanSchema).min(1).max(3),
 });
 
 /** Gemini sometimes wraps JSON in markdown fences despite responseMimeType. */
@@ -60,7 +65,7 @@ function profileNarrative(p: TrainingProfile): string {
           : p.goal === "event"
             ? `event prep${p.eventNote ? ` (${p.eventNote})` : ""}`
             : "general maintenance";
-  return `Athlete context: ~${p.bodyWeightLbs} lb bodyweight, age ${p.age}, goal: ${goal}. Choose splits and accessories appropriate to this (not medical advice).`;
+  return `Athlete context: ~${p.bodyWeightLbs} lb bodyweight, age ${p.age}, goal: ${goal}, targets ~${p.daysPerWeek} strength days/week. Choose splits and accessories that fit that frequency (not medical advice).`;
 }
 
 export async function generateWorkoutOptions(
@@ -148,4 +153,84 @@ ${focusRules}${profileBlock}`,
   }
 
   return { workouts: three };
+}
+
+/** 1–3 exercises to append mid-session (uses recency + current workout context). */
+export async function generateExtraLiftsForActiveSession(params: {
+  feeling: Feeling;
+  durationMinutes: WorkoutDurationMinutes | null;
+  recentMuscleSummary: string;
+  currentSessionSummary: string;
+  existingExerciseNames: string[];
+  trainingProfile: TrainingProfile | null;
+}): Promise<GeneratedWorkout> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY is not set");
+
+  const dm =
+    params.durationMinutes === 30 ||
+    params.durationMinutes === 45 ||
+    params.durationMinutes === 60
+      ? params.durationMinutes
+      : 45;
+
+  const baseConstraints = buildSessionConstraints(params.feeling, dm);
+  const profileBlock = params.trainingProfile ? `\n${profileNarrative(params.trainingProfile)}` : "";
+  const existing =
+    params.existingExerciseNames.length > 0
+      ? params.existingExerciseNames.join(", ")
+      : "(none yet)";
+
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
+    systemInstruction: `You reply with ONLY a JSON object. No markdown fences. No prose before or after. No keys besides the schema.
+Schema: {"exercises":[{"name":"string","sets":number,"rep_range":"string","rest_seconds":number}]}
+Rules:
+- The user is ALREADY mid-workout and wants a small ADD-ON: return 1 to 3 NEW exercises total (not a full session).
+- Each exercise: 2-4 sets, modest extra volume on top of what they already planned.
+- rep_range like "8-12" or "6-10".
+- rest_seconds MUST be 75 for every exercise.
+- Use standard gym exercise names the app can fuzzy-match (bench press, incline dumbbell press, cable row, lat pulldown, leg curl, etc.).
+- Do NOT repeat movements already in today's session (see forbidden list). Prefer complementary muscle groups vs what is already done or in progress.
+- Recent finished-session summary is for rotation/recovery awareness only.
+
+${baseConstraints}
+Add-on rule: keep total add-on small enough to fit inside the remaining time implied by the session budget above — this is extra work at the end or between blocks, not a second workout.${profileBlock}
+
+Current in-progress workout (order, completion, muscles):
+${params.currentSessionSummary}
+
+Recent finished workouts (muscle emphasis):
+${params.recentMuscleSummary}
+
+Already in this session (forbidden to duplicate): ${existing}.`,
+  });
+
+  const userLines = [
+    `Athlete felt ${params.feeling} when the session started.`,
+    `Original target was ~${dm} minutes; they want more work now.`,
+    `Return 1-3 complementary exercises as JSON only.`,
+  ];
+
+  const result = await model.generateContent(userLines.join(" "));
+  const raw = result.response.text();
+  if (!raw?.trim()) throw new Error("Empty Gemini response");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJsonText(raw));
+  } catch {
+    throw new Error("Gemini returned non-JSON");
+  }
+
+  const parsedEx = extraLiftsOnlySchema.safeParse(parsed);
+  if (!parsedEx.success) {
+    throw new Error(`Invalid extra-lifts JSON: ${parsedEx.error.message}`);
+  }
+
+  return { name: "Extra work", exercises: parsedEx.data.exercises };
 }

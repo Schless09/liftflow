@@ -36,6 +36,8 @@ export type TrainingProfile = {
   bodyWeightLbs: number;
   age: number;
   goal: TrainingGoal;
+  /** Target strength days per week (1–7). */
+  daysPerWeek: number;
   /** Optional: e.g. "half marathon in June" when goal is event */
   eventNote?: string;
 };

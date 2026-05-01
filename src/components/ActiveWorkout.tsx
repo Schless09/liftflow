@@ -2,11 +2,13 @@
 
 import {
   appendAbsFinisher,
+  appendAiExtraLifts,
   attachExerciseToWorkoutExercise,
   completeSetAndProgress,
   fetchLiftHistory,
   fetchSwapAlternatives,
   swapExercise,
+  updateLoggedSet,
 } from "@/app/actions/workout";
 import type { WorkoutDetailDto } from "@/lib/db-types";
 import { loadTrainingProfileMerged } from "@/lib/training-profile-load";
@@ -22,13 +24,24 @@ import { WorkoutElapsedTimer } from "./WorkoutElapsedTimer";
 import { ExerciseView } from "./ExerciseView";
 import { RestTimer } from "./RestTimer";
 import { SetLogger } from "./SetLogger";
+import { WorkoutOverviewSheet } from "./WorkoutOverviewSheet";
 import { WorkoutProgressRing } from "./WorkoutProgressRing";
 import { useEscapeKey } from "@/lib/use-escape-key";
 
 type Cursor = { weIndex: number; setIdx: number };
 
 const FINISHER_LS_KEY = (workoutId: string) => `liftflow:abs-finisher:${workoutId}`;
+/** Show abs offer once planned-set completion reaches this fraction (e.g. 0.8 → 80%). */
+const ABS_PROMPT_MIN_COMPLETION = 0.8;
 type FinisherChoice = "loading" | "unset" | "skip" | "appended";
+
+type EditLoggedSetCtx = {
+  setId: string;
+  workoutExerciseId: string;
+  repRange: string;
+  weight: number;
+  reps: number;
+};
 
 function sortWorkout(w: WorkoutDetailDto): WorkoutDetailDto {
   return {
@@ -50,6 +63,20 @@ function findFirstIncomplete(w: WorkoutDetailDto): Cursor | null {
     if (incompleteIdx >= 0) return { weIndex: wi, setIdx: incompleteIdx };
   }
   return null;
+}
+
+/** Share of planned sets logged (by set count), 0–1. */
+function workoutCompletionFraction(w: WorkoutDetailDto): number {
+  let total = 0;
+  let done = 0;
+  for (const we of w.workout_exercises ?? []) {
+    for (const s of we.sets ?? []) {
+      total += 1;
+      if (s.completed) done += 1;
+    }
+  }
+  if (total === 0) return 0;
+  return done / total;
 }
 
 type Props = {
@@ -88,10 +115,23 @@ export function ActiveWorkout({ workout }: Props) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [finisherLs, setFinisherLs] = useState<FinisherChoice>("loading");
   const [awaitingFinisherHydrate, setAwaitingFinisherHydrate] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [editCtx, setEditCtx] = useState<EditLoggedSetCtx | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [aiExtraErr, setAiExtraErr] = useState<string | null>(null);
+  const [absOfferDeferred, setAbsOfferDeferred] = useState(false);
 
   const sessionDone = cursor === null && sorted.workout_exercises.length > 0;
+  const completionFraction = useMemo(() => workoutCompletionFraction(sorted), [sorted]);
+  const pastAbsOfferThreshold = completionFraction >= ABS_PROMPT_MIN_COMPLETION;
+  const absFinisherDecided = finisherLs === "skip" || finisherLs === "appended";
+  const showAbsFinisherGate =
+    !sorted.completed_at &&
+    (finisherLs === "unset" || finisherLs === "loading") &&
+    (sessionDone || (pastAbsOfferThreshold && !absOfferDeferred));
 
   useEffect(() => {
+    setAbsOfferDeferred(false);
     queueMicrotask(() => {
       try {
         const v = localStorage.getItem(FINISHER_LS_KEY(sorted.id));
@@ -128,11 +168,33 @@ export function ActiveWorkout({ workout }: Props) {
     startTransition(() => router.refresh());
   }, [router, startTransition]);
 
+  const addAiLifts = useCallback(() => {
+    if (sessionDone || sorted.completed_at) return;
+    setAiExtraErr(null);
+    startTransition(async () => {
+      try {
+        const profile = await resolveProfile();
+        await appendAiExtraLifts(sorted.id, profile ?? undefined);
+        router.refresh();
+      } catch (e) {
+        setAiExtraErr(e instanceof Error ? e.message : "Could not add lifts");
+      }
+    });
+  }, [
+    resolveProfile,
+    router,
+    sessionDone,
+    sorted.completed_at,
+    sorted.id,
+    startTransition,
+  ]);
+
   useEscapeKey(swapOpen, () => setSwapOpen(false));
   useEscapeKey(mapOpen, () => {
     setMapOpen(false);
     setPickId("");
   });
+  useEscapeKey(outlineOpen, () => setOutlineOpen(false));
 
   const we = cursor != null ? sorted.workout_exercises[cursor.weIndex] : null;
   const setRow = we && cursor ? we.sets[cursor.setIdx] : null;
@@ -244,6 +306,31 @@ export function ActiveWorkout({ workout }: Props) {
               Swap
             </button>
           ) : null}
+          {!sessionDone && !sorted.completed_at ? (
+            <button
+              type="button"
+              onClick={addAiLifts}
+              disabled={pending}
+              title="Uses recent workouts and today's log so far"
+              className={cn(
+                "rounded-xl border border-emerald-700/60 bg-emerald-950/40 px-3 py-2 text-sm font-medium text-emerald-100",
+                "touch-manipulation active:bg-emerald-900/50",
+                pending && "opacity-50",
+              )}
+            >
+              {pending ? "…" : "More lifts"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setOutlineOpen(true)}
+            className={cn(
+              "rounded-xl border border-zinc-600 px-3 py-2 text-sm text-zinc-200",
+              "touch-manipulation active:bg-zinc-800",
+            )}
+          >
+            Outline
+          </button>
           <button
             type="button"
             onClick={() => router.push(`/workout/${sorted.id}/end`)}
@@ -257,6 +344,12 @@ export function ActiveWorkout({ workout }: Props) {
           </div>
         </div>
       </header>
+
+      {aiExtraErr ? (
+        <p className="mb-4 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          {aiExtraErr}
+        </p>
+      ) : null}
 
       {we && setRow && cursor ? (
         <>
@@ -327,14 +420,56 @@ export function ActiveWorkout({ workout }: Props) {
               refresh();
             }}
           />
+
+          <WorkoutOverviewSheet
+            open={outlineOpen}
+            onClose={() => setOutlineOpen(false)}
+            workout={sorted}
+            currentWeIndex={cursor?.weIndex ?? null}
+            currentSetIdx={cursor?.setIdx ?? null}
+            onEditCompleted={(ctx) => {
+              setOutlineOpen(false);
+              setEditCtx(ctx);
+              setEditOpen(true);
+            }}
+          />
+
+          {editCtx ? (
+            <SetLogger
+              key={`edit-${editCtx.setId}`}
+              open={editOpen}
+              onClose={() => {
+                setEditOpen(false);
+                setEditCtx(null);
+              }}
+              sheetTitle="Edit logged set"
+              saveButtonLabel="Update"
+              repRange={editCtx.repRange}
+              defaultWeight={editCtx.weight}
+              initialRepsOverride={editCtx.reps}
+              onLog={({ weight, reps }) => {
+                startTransition(async () => {
+                  await updateLoggedSet({
+                    setId: editCtx.setId,
+                    workoutId: sorted.id,
+                    actualWeight: weight,
+                    actualReps: reps,
+                  });
+                  setEditOpen(false);
+                  setEditCtx(null);
+                  refresh();
+                });
+              }}
+            />
+          ) : null}
         </>
       ) : !sessionDone ? (
         <p className="text-zinc-400">Loading…</p>
-      ) : finisherLs !== "unset" ? (
+      ) : absFinisherDecided ? (
         <p className="text-zinc-400">Wrapping up…</p>
       ) : null}
 
-      {sessionDone && finisherLs === "unset" ? (
+      {showAbsFinisherGate ? (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/95 px-6">
           {awaitingFinisherHydrate ? (
             <>
@@ -343,12 +478,26 @@ export function ActiveWorkout({ workout }: Props) {
                 <p className="mt-2 text-center text-xs text-zinc-500">Saving to your session</p>
               ) : null}
             </>
+          ) : finisherLs === "loading" ? (
+            <>
+              <p className="text-center text-xs font-medium uppercase tracking-wider text-zinc-500">
+                {sessionDone ? "Main work complete" : "Finisher offer"}
+              </p>
+              <p className="mt-3 text-center text-sm text-zinc-400">Preparing optional finisher…</p>
+            </>
           ) : (
             <>
           <p className="text-center text-xs font-medium uppercase tracking-wider text-zinc-500">
-            Main work complete
+            {sessionDone ? "Main work complete" : "Mostly wrapped"}
           </p>
           <p className="mt-3 text-center text-xl font-semibold text-white">Add abs finisher?</p>
+          <p className="mt-3 max-w-sm text-center text-xs leading-relaxed text-zinc-500">
+            You&apos;ve logged{" "}
+            <span className="text-zinc-300">{Math.round(completionFraction * 100)}%</span> of planned
+            sets{sessionDone ? "" : ` (we usually offer this after ${Math.round(ABS_PROMPT_MIN_COMPLETION * 100)}%)`}.
+            If you tapped <span className="text-zinc-400">End</span> before finishing here, you skip this
+            step.
+          </p>
           <p className="mt-2 max-w-sm text-center text-sm leading-relaxed text-zinc-400">
             Optional fast core circuit — one set per move, about{" "}
             <span className="text-zinc-300">{ABS_FINISHER_REST_SEC}s</span> rest between exercises (you
@@ -399,6 +548,19 @@ export function ActiveWorkout({ workout }: Props) {
             >
               +8 min finisher
             </button>
+            {!sessionDone ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setAbsOfferDeferred(true)}
+                className={cn(
+                  "rounded-2xl border border-zinc-500 py-4 text-base font-semibold text-zinc-200",
+                  "touch-manipulation active:bg-zinc-800 disabled:opacity-50",
+                )}
+              >
+                Later — keep lifting
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={pending}
@@ -415,7 +577,7 @@ export function ActiveWorkout({ workout }: Props) {
                 "touch-manipulation active:bg-zinc-900 disabled:opacity-50",
               )}
             >
-              No thanks — end session
+              {sessionDone ? "No thanks — end session" : "No abs this session"}
             </button>
           </div>
             </>

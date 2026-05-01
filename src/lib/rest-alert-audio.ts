@@ -17,6 +17,11 @@ function getCtx(): AudioContext | null {
   return audioCtx;
 }
 
+/** Max gain per tone (0–1). Higher = louder; keep below ~0.5 to reduce clipping when tones overlap. */
+const COUNTDOWN_TICK_GAIN = 0.32;
+const END_CHIME_PRIMARY_GAIN = 0.3;
+const END_CHIME_SECOND_GAIN = 0.22;
+
 function playTone(freq: number, durationSec: number, peakGain: number) {
   const ctx = getCtx();
   if (!ctx || ctx.state === "closed") return;
@@ -45,15 +50,15 @@ export function primeRestAlertAudio(): void {
 /** Tick during final seconds of rest (one beep per second at 5…1). */
 export function playRestCountdownTick(): void {
   primeRestAlertAudio();
-  playTone(1046.5, 0.07, 0.12);
+  playTone(1046.5, 0.07, COUNTDOWN_TICK_GAIN);
 }
 
 /** Stronger two-tone “time’s up”. */
 export function playRestEndChime(): void {
   primeRestAlertAudio();
-  playTone(880, 0.16, 0.13);
+  playTone(880, 0.16, END_CHIME_PRIMARY_GAIN);
   window.setTimeout(() => {
-    playTone(1174.66, 0.2, 0.09);
+    playTone(1174.66, 0.2, END_CHIME_SECOND_GAIN);
   }, 110);
 }
 

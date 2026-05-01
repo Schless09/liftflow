@@ -54,5 +54,10 @@ export default async function WorkoutSessionPage({ params }: { params: Promise<{
     redirect(`/workout/${id}/end`);
   }
 
-  return <ActiveWorkout workout={data as unknown as WorkoutDetailDto} />;
+  return (
+    <ActiveWorkout
+      key={data.id}
+      workout={data as unknown as WorkoutDetailDto}
+    />
+  );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/cn";
 import { useEffect, useMemo, useState } from "react";
 
 function formatElapsed(totalSeconds: number): string {
@@ -15,10 +16,11 @@ function formatElapsed(totalSeconds: number): string {
 
 type Props = {
   startedAtIso: string;
+  className?: string;
 };
 
 /** Live count-up from workout `created_at` (client clock). */
-export function WorkoutElapsedTimer({ startedAtIso }: Props) {
+export function WorkoutElapsedTimer({ startedAtIso, className }: Props) {
   const startMs = useMemo(() => new Date(startedAtIso).getTime(), [startedAtIso]);
   const [elapsedSec, setElapsedSec] = useState(0);
 
@@ -37,7 +39,12 @@ export function WorkoutElapsedTimer({ startedAtIso }: Props) {
   const label = formatElapsed(elapsedSec);
 
   return (
-    <p className="text-sm tabular-nums text-zinc-300" role="timer" aria-live="polite" aria-label={`Elapsed ${label}`}>
+    <p
+      className={cn("text-xs tabular-nums text-zinc-300 sm:text-sm", className)}
+      role="timer"
+      aria-live="polite"
+      aria-label={`Elapsed ${label}`}
+    >
       <span className="text-zinc-500">Elapsed </span>
       <span>{label}</span>
     </p>

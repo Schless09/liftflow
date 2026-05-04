@@ -40,7 +40,7 @@ export default function PickPage() {
   useEffect(() => {
     const d = readDraftFromStorage();
     if (!d) {
-      router.replace("/");
+      router.replace("/workout/start");
       return;
     }
     queueMicrotask(() => {

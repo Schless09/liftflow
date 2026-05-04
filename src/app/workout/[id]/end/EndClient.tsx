@@ -271,7 +271,7 @@ export function EndClient({ workoutId }: Props) {
           Done
         </Link>
         <Link
-          href="/pick"
+          href="/workout"
           className={cn(
             "flex min-h-12 items-center justify-center rounded-2xl border border-zinc-700 text-sm font-medium text-zinc-300",
             "touch-manipulation active:bg-zinc-800",

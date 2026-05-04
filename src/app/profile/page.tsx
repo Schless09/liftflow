@@ -11,7 +11,7 @@ import {
   saveTrainingProfileToStorage,
 } from "@/lib/training-profile-storage";
 import type { TrainingGoal, TrainingProfile } from "@/lib/types";
-import Link from "next/link";
+import { ProgressPhotosSection } from "@/components/ProgressPhotosSection";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -96,9 +96,6 @@ export default function ProfilePage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-12 pt-8">
-      <Link href="/" className="mb-6 self-start text-sm text-zinc-500">
-        ← Home
-      </Link>
       <h1 className="text-2xl font-bold text-white">Your profile</h1>
       <p className="mt-2 text-sm text-zinc-400">
         Used for starter weights when you don&apos;t have a prior log for a lift, and to steer AI
@@ -179,6 +176,8 @@ export default function ProfilePage() {
           </button>
         ))}
       </div>
+
+      <ProgressPhotosSection />
 
       <button
         type="button"

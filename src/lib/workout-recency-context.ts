@@ -28,7 +28,7 @@ export async function getWorkoutRecencyContext(): Promise<WorkoutRecencyContext>
     .select("id, name, completed_at")
     .not("completed_at", "is", null)
     .order("completed_at", { ascending: false })
-    .limit(2);
+    .limit(3);
 
   const recent: RecentWorkoutSummary[] = [];
   const allRecentWe: { workout_id: string; exercises: { muscle_group: string } | null }[] = [];

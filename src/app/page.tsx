@@ -1,5 +1,5 @@
-import { HomeClient } from "./HomeClient";
+import { HomeHistoryClient } from "./HomeHistoryClient";
 
 export default function Home() {
-  return <HomeClient />;
+  return <HomeHistoryClient />;
 }

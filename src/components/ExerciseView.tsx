@@ -33,6 +33,9 @@ type Props = {
   hasMappedExercise: boolean;
   logHint?: string | null;
   onDone: () => void;
+  /** When set, shows a control to drop this movement from the session entirely. */
+  onRemoveFromSession?: (() => void) | null;
+  removeFromSessionDisabled?: boolean;
 };
 
 export function ExerciseView({
@@ -49,6 +52,8 @@ export function ExerciseView({
   hasMappedExercise,
   logHint,
   onDone,
+  onRemoveFromSession,
+  removeFromSessionDisabled,
 }: Props) {
   const [tab, setTab] = useState<StatsTab>("current");
   const timeBased = repRangeIsTimeBased(repRange);
@@ -62,6 +67,19 @@ export function ExerciseView({
           {timeBased ? "" : " reps"}
         </p>
         {lastLine ? <p className="mt-2 text-sm font-medium text-emerald-400/90">{lastLine}</p> : null}
+        {onRemoveFromSession ? (
+          <button
+            type="button"
+            disabled={removeFromSessionDisabled}
+            onClick={onRemoveFromSession}
+            className={cn(
+              "mt-3 text-left text-xs font-semibold text-red-400/95 touch-manipulation",
+              "underline decoration-red-400/50 underline-offset-2 disabled:opacity-45",
+            )}
+          >
+            Delete exercise
+          </button>
+        ) : null}
       </div>
 
       <div className="relative flex aspect-video w-full max-h-64 items-center justify-center overflow-hidden rounded-2xl bg-zinc-800">

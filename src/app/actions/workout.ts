@@ -3,6 +3,7 @@
 import { parseRepRange } from "@/lib/rep-range";
 import { resolveExercise } from "@/lib/exercise-resolve";
 import { generateExtraLiftsForActiveSession } from "@/lib/gemini/workout-generate";
+import { formatExerciseCatalogForPrompt } from "@/lib/exercise-catalog-for-prompt";
 import { nextPlannedWeight } from "@/lib/progression";
 import { summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { suggestWorkingWeight } from "@/lib/suggest-working-weight";
@@ -243,6 +244,16 @@ export async function appendAiExtraLifts(workoutId: string, trainingProfilePaylo
   const ctx = await getWorkoutRecencyContext();
   const recentMuscleSummary = summarizeRecentForPrompt(ctx.recent);
 
+  const { data: exerciseRows, error: exErr } = await supabase.from("exercises").select("*");
+  if (exErr || !exerciseRows) throw new Error(exErr?.message ?? "Failed to load exercises");
+  const exercises = exerciseRows as ExerciseRow[];
+
+  const catalogHint = formatExerciseCatalogForPrompt(
+    exercises.map((e) => ({ canonical_name: e.canonical_name, muscle_group: e.muscle_group })),
+    ctx.suggestedFocus,
+    2600,
+  );
+
   const feeling = parseFeelingFromRow(String(wrow.feeling));
   const durationMinutes = normalizeWorkoutDuration(wrow.duration_minutes);
 
@@ -253,12 +264,8 @@ export async function appendAiExtraLifts(workoutId: string, trainingProfilePaylo
     currentSessionSummary,
     existingExerciseNames,
     trainingProfile: profile,
+    exerciseCatalogHint: catalogHint || null,
   });
-
-  const { data: exerciseRows, error: exErr } = await supabase.from("exercises").select("*");
-  if (exErr || !exerciseRows) throw new Error(exErr?.message ?? "Failed to load exercises");
-
-  const exercises = exerciseRows as ExerciseRow[];
 
   const { data: orderRows } = await supabase
     .from("workout_exercises")
@@ -418,6 +425,44 @@ export async function swapExercise(
   trainingProfilePayload?: unknown,
 ) {
   await attachExerciseToWorkoutExercise(workoutExerciseId, newExerciseId, trainingProfilePayload);
+}
+
+/** Deletes one exercise slot and all of its sets (DB cascade). Workout must be in progress. */
+export async function removeWorkoutExercise(params: {
+  workoutExerciseId: string;
+  workoutId: string;
+}) {
+  const supabase = await createServerSupabaseClient();
+
+  const { data: w, error: wErr } = await supabase
+    .from("workouts")
+    .select("id, completed_at")
+    .eq("id", params.workoutId)
+    .single();
+
+  if (wErr || !w) throw new Error(wErr?.message ?? "Workout not found");
+  if (w.completed_at) throw new Error("Workout already finished");
+
+  const { data: we, error: weErr } = await supabase
+    .from("workout_exercises")
+    .select("id, workout_id")
+    .eq("id", params.workoutExerciseId)
+    .single();
+
+  if (weErr || !we) throw new Error(weErr?.message ?? "Exercise not found");
+  if (we.workout_id !== params.workoutId) {
+    throw new Error("Exercise does not belong to this workout");
+  }
+
+  const { error: delErr } = await supabase
+    .from("workout_exercises")
+    .delete()
+    .eq("id", params.workoutExerciseId);
+
+  if (delErr) throw new Error(delErr.message);
+
+  revalidatePath(`/workout/${params.workoutId}`);
+  revalidatePath("/");
 }
 
 export async function appendAbsFinisher(workoutId: string, minutes: 5 | 8) {
@@ -619,6 +664,52 @@ function buildFinishSummary(
   };
 }
 
+export type WorkoutHistoryListRow = {
+  id: string;
+  name: string;
+  created_at: string;
+  completed_at: string | null;
+  duration_minutes: number | null;
+  total_volume: number | null;
+};
+
+/** Recent workouts for the home feed (newest first). */
+export async function listWorkoutHistory(limit = 40): Promise<WorkoutHistoryListRow[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("id, name, created_at, completed_at, duration_minutes, total_volume")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    created_at: r.created_at,
+    completed_at: r.completed_at,
+    duration_minutes: r.duration_minutes,
+    total_volume: r.total_volume != null ? Number(r.total_volume) : null,
+  }));
+}
+
+/** Latest in-progress workout, if any. */
+export async function getActiveWorkoutSummary(): Promise<{ id: string; name: string } | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("id, name")
+    .is("completed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return { id: data.id, name: data.name };
+}
+
 export async function finishWorkout(workoutId: string): Promise<FinishWorkoutSummary> {
   const supabase = await createServerSupabaseClient();
 
@@ -700,6 +791,8 @@ export async function finishWorkout(workoutId: string): Promise<FinishWorkoutSum
     .eq("id", workoutId);
 
   revalidatePath(`/workout/${workoutId}/end`);
+  revalidatePath("/");
+  revalidatePath("/workout");
   return buildFinishSummary(volume, prev?.total_volume != null ? Number(prev.total_volume) : null, {
     name: self.name || "Workout",
     durationMinutes: self.duration_minutes,

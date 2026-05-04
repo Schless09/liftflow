@@ -12,6 +12,9 @@ type Props = {
   workout: WorkoutDetailDto;
   currentWeIndex: number | null;
   currentSetIdx: number | null;
+  canRemoveExercises: boolean;
+  onRemoveExercise: (workoutExerciseId: string, displayName: string) => void;
+  removeDisabled?: boolean;
   onEditCompleted: (ctx: {
     setId: string;
     workoutExerciseId: string;
@@ -27,6 +30,9 @@ export function WorkoutOverviewSheet({
   workout,
   currentWeIndex,
   currentSetIdx,
+  canRemoveExercises,
+  onRemoveExercise,
+  removeDisabled,
   onEditCompleted,
 }: Props) {
   const tapRef = useRef<{ id: string; t: number } | null>(null);
@@ -72,6 +78,12 @@ export function WorkoutOverviewSheet({
           <p className="mb-3 text-xs text-zinc-500">
             Completed sets: double-tap a row (or double-click) to edit weight{" "}
             <span className="text-zinc-600">·</span> reps.
+            {canRemoveExercises ? (
+              <>
+                {" "}
+                <span className="text-zinc-600">·</span> Remove drops the whole exercise and all sets.
+              </>
+            ) : null}
           </p>
           <div className="space-y-6">
             {exercises.map((we, wi) => {
@@ -80,8 +92,25 @@ export function WorkoutOverviewSheet({
               const setsSorted = [...(we.sets ?? [])].sort((a, b) => a.set_number - b.set_number);
               return (
                 <div key={we.id}>
-                  <p className="text-sm font-semibold text-white">{name}</p>
-                  <p className="text-xs text-zinc-500">{we.rep_range}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">{name}</p>
+                      <p className="text-xs text-zinc-500">{we.rep_range}</p>
+                    </div>
+                    {canRemoveExercises ? (
+                      <button
+                        type="button"
+                        disabled={removeDisabled}
+                        onClick={() => onRemoveExercise(we.id, name)}
+                        className={cn(
+                          "shrink-0 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-400/95",
+                          "touch-manipulation active:bg-red-950/50 disabled:opacity-45",
+                        )}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
                   <ul className="mt-2 space-y-1.5">
                     {setsSorted.map((s, si) => {
                       const isCurrent = currentWeIndex === wi && currentSetIdx === si;

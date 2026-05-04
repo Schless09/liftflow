@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { AppShell } from "@/components/AppShell";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -39,7 +40,7 @@ export default function RootLayout({
               <UserButton />
             </Show>
           </header>
-          {children}
+          <AppShell>{children}</AppShell>
         </ClerkProvider>
       </body>
     </html>

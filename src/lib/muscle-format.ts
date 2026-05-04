@@ -14,7 +14,8 @@ export function summarizeRecentForPrompt(recent: RecentWorkoutSummary[]): string
   }
   return recent
     .map((r, i) => {
-      const label = i === 0 ? "Most recent" : "Before that";
+      const label =
+        i === 0 ? "Most recent" : i === 1 ? "Previous" : i === 2 ? "Two sessions ago" : "Earlier";
       const groups =
         r.muscleGroups.length > 0 ? r.muscleGroups.join(", ") : "no mapped muscle data";
       return `${label} (${r.name}): ${groups}`;

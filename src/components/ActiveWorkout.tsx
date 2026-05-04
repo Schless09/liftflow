@@ -7,6 +7,7 @@ import {
   completeSetAndProgress,
   fetchLiftHistory,
   fetchSwapAlternatives,
+  removeWorkoutExercise,
   swapExercise,
   updateLoggedSet,
 } from "@/app/actions/workout";
@@ -273,6 +274,22 @@ export function ActiveWorkout({ workout }: Props) {
     }
   }, [sorted.id, cursor]);
 
+  const confirmRemoveExercise = useCallback(
+    (workoutExerciseId: string, displayName: string) => {
+      if (!window.confirm(`Remove "${displayName}" and all of its sets from this session?`)) return;
+      startTransition(async () => {
+        try {
+          await removeWorkoutExercise({ workoutExerciseId, workoutId: sorted.id });
+          setOutlineOpen(false);
+          router.refresh();
+        } catch (e) {
+          window.alert(e instanceof Error ? e.message : "Could not remove exercise");
+        }
+      });
+    },
+    [router, sorted.id, startTransition],
+  );
+
   return (
     <div
       className={cn(
@@ -280,27 +297,32 @@ export function ActiveWorkout({ workout }: Props) {
         restOpen ? "pb-24" : "pb-10",
       )}
     >
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-wider text-zinc-500">{sorted.name}</p>
-          <p className="text-sm text-zinc-400">
-            Session
-            {sorted.duration_minutes != null ? (
-              <span className="text-zinc-500"> · {sorted.duration_minutes} min plan</span>
+      <header className="mb-5 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium uppercase leading-snug tracking-wider text-zinc-500">
+              {sorted.name}
+            </p>
+            <p className="mt-1 text-xs leading-snug text-zinc-400 sm:text-sm">
+              Session
+              {sorted.duration_minutes != null ? (
+                <span className="text-zinc-500"> · {sorted.duration_minutes} min plan</span>
+              ) : null}
+            </p>
+            {sorted.created_at ? (
+              <WorkoutElapsedTimer startedAtIso={sorted.created_at} className="mt-1" />
             ) : null}
-          </p>
-          {sorted.created_at ? <WorkoutElapsedTimer startedAtIso={sorted.created_at} /> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
+          </div>
           <WorkoutProgressRing workout={sorted} />
-          <div className="flex gap-2">
+        </div>
+        <div className="-mx-1 flex max-w-[100vw] flex-wrap gap-2 px-1 sm:gap-2">
           {we?.exercise_id ? (
             <button
               type="button"
               onClick={openSwap}
               className={cn(
-                "rounded-xl border border-zinc-600 px-3 py-2 text-sm text-zinc-200",
-                "touch-manipulation active:bg-zinc-800",
+                "rounded-lg border border-zinc-600 px-2.5 py-1.5 text-xs font-medium text-zinc-200",
+                "touch-manipulation active:bg-zinc-800 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm",
               )}
             >
               Swap
@@ -313,8 +335,8 @@ export function ActiveWorkout({ workout }: Props) {
               disabled={pending}
               title="Uses recent workouts and today's log so far"
               className={cn(
-                "rounded-xl border border-emerald-700/60 bg-emerald-950/40 px-3 py-2 text-sm font-medium text-emerald-100",
-                "touch-manipulation active:bg-emerald-900/50",
+                "rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-2.5 py-1.5 text-xs font-medium text-emerald-100",
+                "touch-manipulation active:bg-emerald-900/50 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm",
                 pending && "opacity-50",
               )}
             >
@@ -325,8 +347,8 @@ export function ActiveWorkout({ workout }: Props) {
             type="button"
             onClick={() => setOutlineOpen(true)}
             className={cn(
-              "rounded-xl border border-zinc-600 px-3 py-2 text-sm text-zinc-200",
-              "touch-manipulation active:bg-zinc-800",
+              "rounded-lg border border-zinc-600 px-2.5 py-1.5 text-xs font-medium text-zinc-200",
+              "touch-manipulation active:bg-zinc-800 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm",
             )}
           >
             Outline
@@ -335,13 +357,12 @@ export function ActiveWorkout({ workout }: Props) {
             type="button"
             onClick={() => router.push(`/workout/${sorted.id}/end`)}
             className={cn(
-              "rounded-xl bg-zinc-800 px-3 py-2 text-sm font-medium text-white",
-              "touch-manipulation active:bg-zinc-700",
+              "rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white",
+              "touch-manipulation active:bg-zinc-700 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm",
             )}
           >
             End
           </button>
-          </div>
         </div>
       </header>
 
@@ -382,6 +403,12 @@ export function ActiveWorkout({ workout }: Props) {
             hasMappedExercise={Boolean(we.exercise_id)}
             logHint="Tap Log Set when the set is done to record weight and reps."
             onDone={() => setLogOpen(true)}
+            onRemoveFromSession={
+              sorted.completed_at
+                ? undefined
+                : () => confirmRemoveExercise(we.id, title)
+            }
+            removeFromSessionDisabled={pending}
           />
 
           <SetLogger
@@ -427,6 +454,9 @@ export function ActiveWorkout({ workout }: Props) {
             workout={sorted}
             currentWeIndex={cursor?.weIndex ?? null}
             currentSetIdx={cursor?.setIdx ?? null}
+            canRemoveExercises={!sorted.completed_at}
+            onRemoveExercise={confirmRemoveExercise}
+            removeDisabled={pending}
             onEditCompleted={(ctx) => {
               setOutlineOpen(false);
               setEditCtx(ctx);

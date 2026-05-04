@@ -18,7 +18,8 @@ const DRAFT_KEY = "liftflow:draft";
 
 type Step = "feeling" | "duration" | "context";
 
-export function HomeClient() {
+/** New workout wizard: feeling → duration → context → AI pick (`/pick`). */
+export function WorkoutStartClient() {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
   const [step, setStep] = useState<Step>("feeling");
@@ -108,15 +109,13 @@ export function HomeClient() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-12 pt-10">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-500">LiftFlow</p>
-        <Link
-          href="/profile"
-          className="text-sm font-medium text-zinc-400 underline decoration-zinc-600 underline-offset-4 hover:text-zinc-300"
-        >
-          Profile
-        </Link>
-      </div>
+      <Link
+        href="/workout"
+        className="mb-4 self-start text-sm text-zinc-500 touch-manipulation active:text-zinc-400"
+      >
+        ← Workout
+      </Link>
+      <p className="text-sm font-medium uppercase tracking-widest text-emerald-500">New session</p>
 
       {step === "feeling" ? (
         <>
@@ -225,7 +224,7 @@ export function HomeClient() {
             ← Back
           </button>
           <h1 className="mt-4 text-3xl font-bold text-white">Where you&apos;ve been</h1>
-          <p className="mt-2 text-zinc-400">Last two finished sessions — then today&apos;s bias.</p>
+          <p className="mt-2 text-zinc-400">Last three finished sessions — then today&apos;s bias.</p>
 
           {contextLoading ? (
             <p className="mt-10 text-zinc-500">Pulling your history…</p>
@@ -237,19 +236,23 @@ export function HomeClient() {
                     No completed workouts yet. Finish a session to build rotation memory.
                   </p>
                 ) : (
-                  context.recent.map((r, i) => (
-                    <div key={r.id}>
-                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                        {i === 0 ? "Last workout" : "Before that"}
-                      </p>
-                      <p className="mt-1 text-base font-semibold text-white">{r.name}</p>
-                      <p className="mt-1 text-sm text-zinc-400">
-                        {r.muscleGroups.length > 0
-                          ? `Muscle groups: ${r.muscleGroups.join(", ")}`
-                          : "No mapped lifts logged (add exercises from the library next time)."}
-                      </p>
-                    </div>
-                  ))
+                  context.recent.map((r, i) => {
+                    const heading =
+                      i === 0 ? "Most recent" : i === 1 ? "Previous" : i === 2 ? "Two sessions ago" : "Earlier";
+                    return (
+                      <div key={r.id}>
+                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                          {heading}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-white">{r.name}</p>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {r.muscleGroups.length > 0
+                            ? `Muscle groups: ${r.muscleGroups.join(", ")}`
+                            : "No mapped lifts logged (add exercises from the library next time)."}
+                        </p>
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
@@ -278,7 +281,7 @@ export function HomeClient() {
                   {generateBusy ? "Generating…" : "Emphasize today's areas"}
                 </button>
                 <p className="px-1 text-center text-xs text-zinc-500">
-                  Uses the green “Today — emphasize” muscle groups and your last two sessions.
+                  Uses the green “Today — emphasize” muscle groups and your last three sessions.
                 </p>
                 <button
                   type="button"

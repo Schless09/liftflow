@@ -1,6 +1,8 @@
 import { generateWorkoutOptions } from "@/lib/gemini/workout-generate";
+import { formatExerciseCatalogForPrompt } from "@/lib/exercise-catalog-for-prompt";
 import { summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getWorkoutRecencyContext } from "@/lib/workout-recency-context";
 import type { Feeling, WorkoutDurationMinutes } from "@/lib/types";
 import { auth } from "@clerk/nextjs/server";
@@ -60,6 +62,15 @@ export async function POST(req: Request) {
     const trainingProfile = parseTrainingProfileJson(body?.trainingProfile ?? null);
     const generationMode = parseGenerationMode(body?.generationMode);
 
+    const supabase = await createServerSupabaseClient();
+    const { data: catalogRows } = await supabase
+      .from("exercises")
+      .select("canonical_name, muscle_group");
+    const exerciseCatalogHint = formatExerciseCatalogForPrompt(
+      catalogRows ?? [],
+      focusMuscleGroups,
+    );
+
     const plan = await generateWorkoutOptions(
       feeling,
       durationMinutes,
@@ -67,6 +78,7 @@ export async function POST(req: Request) {
       recentMuscleSummary,
       trainingProfile,
       generationMode,
+      exerciseCatalogHint || null,
     );
     return NextResponse.json(plan);
   } catch (e) {

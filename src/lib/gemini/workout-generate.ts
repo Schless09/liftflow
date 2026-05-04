@@ -36,6 +36,18 @@ function extractJsonText(raw: string): string {
   return t;
 }
 
+function equipmentAssumptionBlock(): string {
+  return `Equipment: typical gym with barbells, dumbbells, adjustable bench, cable station, and common machines (e.g. leg press, lat pulldown, leg curl). Prefer movements available with that kit.`;
+}
+
+function exerciseNamingRules(): string {
+  return `Exercise naming:
+- Prefer exact "name" strings from the APP LIBRARY block when it appears below; otherwise use a very close synonym that would match the same movement (e.g. same implement and pattern).
+- Do not repeat the same exercise name twice in one workout option.
+- Across the 3 workout options, vary primary lifts; avoid duplicating the same full exercise list in multiple options.
+- Keep each option cohesive for the time budget (no redundant overlapping singles).`;
+}
+
 function buildSessionConstraints(feeling: Feeling, durationMinutes: WorkoutDurationMinutes): string {
   const time =
     durationMinutes === 30
@@ -75,6 +87,7 @@ export async function generateWorkoutOptions(
   recentMuscleSummary: string | undefined,
   trainingProfile: TrainingProfile | null,
   generationMode: "rotation" | "balanced" = "rotation",
+  exerciseCatalogHint?: string | null,
 ): Promise<GeneratedPlanResponse> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
@@ -94,13 +107,18 @@ Balanced workout generation:
 - Optional: make one option slightly upper-emphasis, one lower-emphasis, and one evenly full-body — but all must stay balanced overall.`
       : focusList.length > 0
         ? `Rotation / recovery bias:
-- Muscle groups hit in the user's last 2 finished sessions (if any): ${recentMuscleSummary ?? "unknown / first sessions"}.
+- Muscle groups hit in the user's last 3 finished sessions (if any): ${recentMuscleSummary ?? "unknown / first sessions"}.
 - Today each of the 3 workout options should PRIORITIZE these muscle groups: ${focusList}.
 - Prefer exercises whose primary muscle is one of those groups. Do not repeat the exact same split in all 3 options — vary exercises and angles while staying in those focus areas.
 - If a group is small (e.g. arms-only), you may add one short complementary movement, but keep most volume on the focus list.`
         : "";
 
   const profileBlock = trainingProfile ? `\n${profileNarrative(trainingProfile)}` : "";
+
+  const catalogBlock =
+    exerciseCatalogHint?.trim().length ?? 0
+      ? `\n\nAPP LIBRARY (use these names when possible):\n${exerciseCatalogHint!.trim()}`
+      : "";
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
@@ -114,11 +132,13 @@ Rules:
 - workouts array must contain exactly 3 objects.
 - rep_range format like "8-10" or "6-8".
 - rest_seconds: MUST always be 75 for every exercise (uniform app default between sets).
-- Use standard exercise names (bench press, squat, row, etc.).
 - Each of the 3 workout options MUST fit realistically within the user's time budget and energy level below.
 
+${equipmentAssumptionBlock()}
+${exerciseNamingRules()}
+
 ${constraints}
-${focusRules}${profileBlock}`,
+${focusRules}${profileBlock}${catalogBlock}`,
   });
 
   const userLines = [
@@ -163,6 +183,7 @@ export async function generateExtraLiftsForActiveSession(params: {
   currentSessionSummary: string;
   existingExerciseNames: string[];
   trainingProfile: TrainingProfile | null;
+  exerciseCatalogHint?: string | null;
 }): Promise<GeneratedWorkout> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
@@ -181,6 +202,11 @@ export async function generateExtraLiftsForActiveSession(params: {
       ? params.existingExerciseNames.join(", ")
       : "(none yet)";
 
+  const catalogBlock =
+    params.exerciseCatalogHint?.trim().length ?? 0
+      ? `\n\nAPP LIBRARY (use these names when possible):\n${params.exerciseCatalogHint!.trim()}`
+      : "";
+
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
@@ -194,12 +220,15 @@ Rules:
 - Each exercise: 2-4 sets, modest extra volume on top of what they already planned.
 - rep_range like "8-12" or "6-10".
 - rest_seconds MUST be 75 for every exercise.
-- Use standard gym exercise names the app can fuzzy-match (bench press, incline dumbbell press, cable row, lat pulldown, leg curl, etc.).
+- Prefer exact "name" strings from APP LIBRARY below when listed; otherwise a very close synonym the app can fuzzy-match.
 - Do NOT repeat movements already in today's session (see forbidden list). Prefer complementary muscle groups vs what is already done or in progress.
+- Do not propose two add-on exercises that are the same pattern (e.g. two horizontal presses).
 - Recent finished-session summary is for rotation/recovery awareness only.
 
+${equipmentAssumptionBlock()}
+
 ${baseConstraints}
-Add-on rule: keep total add-on small enough to fit inside the remaining time implied by the session budget above — this is extra work at the end or between blocks, not a second workout.${profileBlock}
+Add-on rule: keep total add-on small enough to fit inside the remaining time implied by the session budget above — this is extra work at the end or between blocks, not a second workout.${profileBlock}${catalogBlock}
 
 Current in-progress workout (order, completion, muscles):
 ${params.currentSessionSummary}

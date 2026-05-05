@@ -5,7 +5,7 @@ export type ExerciseCatalogRow = {
   muscle_group: string;
 };
 
-const DEFAULT_MAX_CHARS = 3200;
+const DEFAULT_MAX_CHARS = 3800;
 
 /**
  * Focus muscle groups (lowercase) listed first with more names; then other groups briefly.
@@ -19,6 +19,13 @@ export function formatExerciseCatalogForPrompt(
   if (rows.length === 0) {
     return "";
   }
+
+  const intro = `CATALOG DISCIPLINE:
+- Use ONLY exercise "name" strings that appear verbatim in the lists below (any section). That maximizes app matching.
+- Do not invent new titles when a listed name describes the same movement.
+- If several listed names fit, pick one listed name exactly—do not merge or rephrase.
+
+`;
 
   const focus = new Set(focusGroupsLower.map((g) => g.trim().toLowerCase()).filter(Boolean));
   const byGroup = new Map<string, string[]>();
@@ -40,7 +47,7 @@ export function formatExerciseCatalogForPrompt(
     const key = fg.trim().toLowerCase();
     if (!key) continue;
     const names = byGroup.get(key) ?? [];
-    const pick = names.slice(0, 16);
+    const pick = names.slice(0, 20);
     if (pick.length > 0) {
       lines.push(`${key}: ${pick.join(", ")}`);
     }
@@ -51,7 +58,7 @@ export function formatExerciseCatalogForPrompt(
   for (const g of sortedKeys) {
     if (focus.has(g)) continue;
     const names = byGroup.get(g) ?? [];
-    const pick = names.slice(0, 10);
+    const pick = names.slice(0, 12);
     if (pick.length > 0) {
       otherLines.push(`${g}: ${pick.join(", ")}`);
     }
@@ -59,10 +66,10 @@ export function formatExerciseCatalogForPrompt(
 
   let out =
     lines.length > 0
-      ? `Prioritize names under today's focus, then mix from the rest.\n${lines.join("\n")}`
-      : "";
+      ? `${intro}Prioritize names under today's focus, then mix from the rest.\n${lines.join("\n")}`
+      : intro.trimEnd();
   if (otherLines.length > 0) {
-    out += `${out ? "\n\n" : ""}Other muscles (examples):\n${otherLines.join("\n")}`;
+    out += `${out ? "\n\n" : `${intro}`}Other muscles (examples):\n${otherLines.join("\n")}`;
   }
 
   if (out.length > maxChars) {

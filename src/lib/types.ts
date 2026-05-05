@@ -34,6 +34,13 @@ export type GeneratedPlanResponse = {
 /** Training intent — used for volume/load bias (rough heuristics). */
 export type TrainingGoal = "bulk" | "cut" | "maintain" | "recomp" | "event";
 
+/** Where the user trains — filters exercise catalog and AI equipment rules. */
+export type GymEquipmentPreset =
+  | "full_gym"
+  | "home_gym"
+  | "bodyweight_only"
+  | "dumbbells_bands";
+
 export type TrainingProfile = {
   bodyWeightLbs: number;
   age: number;
@@ -42,6 +49,16 @@ export type TrainingProfile = {
   daysPerWeek: number;
   /** Optional: e.g. "half marathon in June" when goal is event */
   eventNote?: string;
+  /** Gym access — defaults to full_gym when omitted (legacy profiles). */
+  gymEquipmentPreset?: GymEquipmentPreset;
+};
+
+/** One logged exercise line from a past session (for AI context). */
+export type RecentExerciseLog = {
+  name: string;
+  muscleGroup: string | null;
+  /** Best completed set, e.g. "185 lb × 8" or "12 reps". */
+  bestEffort: string | null;
 };
 
 export type RecentWorkoutSummary = {
@@ -49,6 +66,7 @@ export type RecentWorkoutSummary = {
   name: string;
   completedAt: string;
   muscleGroups: string[];
+  exercises: RecentExerciseLog[];
 };
 
 export type WorkoutRecencyContext = {

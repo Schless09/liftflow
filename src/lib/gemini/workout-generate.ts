@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
+import {
+  equipmentPromptBlockForPreset,
+  resolvedGymEquipmentPreset,
+} from "../gym-equipment-preset";
 import type {
   Feeling,
   GeneratedPlanResponse,
@@ -36,13 +40,9 @@ function extractJsonText(raw: string): string {
   return t;
 }
 
-function equipmentAssumptionBlock(): string {
-  return `Equipment: typical gym with barbells, dumbbells, adjustable bench, cable station, and common machines (e.g. leg press, lat pulldown, leg curl). Prefer movements available with that kit.`;
-}
-
 function exerciseNamingRules(): string {
   return `Exercise naming:
-- Prefer exact "name" strings from the APP LIBRARY block when it appears below; otherwise use a very close synonym that would match the same movement (e.g. same implement and pattern).
+- Obey CATALOG DISCIPLINE in the APP LIBRARY block (verbatim names from lists).
 - Do not repeat the same exercise name twice in one workout option.
 - Across the 3 workout options, vary primary lifts; avoid duplicating the same full exercise list in multiple options.
 - Keep each option cohesive for the time budget (no redundant overlapping singles).`;
@@ -77,7 +77,16 @@ function profileNarrative(p: TrainingProfile): string {
           : p.goal === "event"
             ? `event prep${p.eventNote ? ` (${p.eventNote})` : ""}`
             : "general maintenance";
-  return `Athlete context: ~${p.bodyWeightLbs} lb bodyweight, age ${p.age}, goal: ${goal}, targets ~${p.daysPerWeek} strength days/week. Choose splits and accessories that fit that frequency (not medical advice).`;
+  const preset = resolvedGymEquipmentPreset(p);
+  const equipLabel =
+    preset === "full_gym"
+      ? "trains at a full commercial gym"
+      : preset === "home_gym"
+        ? "home gym (free weights, bench, bands — not a full machine floor)"
+        : preset === "bodyweight_only"
+          ? "bodyweight-only training environment"
+          : "dumbbells, kettlebells, bands, and bodyweight only";
+  return `Athlete context: ~${p.bodyWeightLbs} lb bodyweight, age ${p.age}, goal: ${goal}, targets ~${p.daysPerWeek} strength days/week, ${equipLabel}. Choose splits and accessories that fit that frequency (not medical advice).`;
 }
 
 export async function generateWorkoutOptions(
@@ -85,12 +94,16 @@ export async function generateWorkoutOptions(
   durationMinutes: WorkoutDurationMinutes,
   focusMuscleGroups: string[],
   recentMuscleSummary: string | undefined,
+  recentLiftDetail: string,
   trainingProfile: TrainingProfile | null,
   generationMode: "rotation" | "balanced" = "rotation",
   exerciseCatalogHint?: string | null,
 ): Promise<GeneratedPlanResponse> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
+
+  const preset = resolvedGymEquipmentPreset(trainingProfile);
+  const equipmentBlock = equipmentPromptBlockForPreset(preset);
 
   const constraints = buildSessionConstraints(feeling, durationMinutes);
 
@@ -115,9 +128,12 @@ Balanced workout generation:
 
   const profileBlock = trainingProfile ? `\n${profileNarrative(trainingProfile)}` : "";
 
+  const historyBlock = `\n\nRecent sessions — exercises and best logged sets (context for progression and variety; do not blindly copy the same workout):
+${recentLiftDetail.trim()}`;
+
   const catalogBlock =
     exerciseCatalogHint?.trim().length ?? 0
-      ? `\n\nAPP LIBRARY (use these names when possible):\n${exerciseCatalogHint!.trim()}`
+      ? `\n\nAPP LIBRARY:\n${exerciseCatalogHint!.trim()}`
       : "";
 
   const genAI = new GoogleGenerativeAI(key);
@@ -134,11 +150,11 @@ Rules:
 - rest_seconds: MUST always be 75 for every exercise (uniform app default between sets).
 - Each of the 3 workout options MUST fit realistically within the user's time budget and energy level below.
 
-${equipmentAssumptionBlock()}
+${equipmentBlock}
 ${exerciseNamingRules()}
 
 ${constraints}
-${focusRules}${profileBlock}${catalogBlock}`,
+${focusRules}${historyBlock}${profileBlock}${catalogBlock}`,
   });
 
   const userLines = [
@@ -180,6 +196,7 @@ export async function generateExtraLiftsForActiveSession(params: {
   feeling: Feeling;
   durationMinutes: WorkoutDurationMinutes | null;
   recentMuscleSummary: string;
+  recentLiftDetail: string;
   currentSessionSummary: string;
   existingExerciseNames: string[];
   trainingProfile: TrainingProfile | null;
@@ -204,8 +221,12 @@ export async function generateExtraLiftsForActiveSession(params: {
 
   const catalogBlock =
     params.exerciseCatalogHint?.trim().length ?? 0
-      ? `\n\nAPP LIBRARY (use these names when possible):\n${params.exerciseCatalogHint!.trim()}`
+      ? `\n\nAPP LIBRARY:\n${params.exerciseCatalogHint!.trim()}`
       : "";
+
+  const preset = resolvedGymEquipmentPreset(params.trainingProfile);
+  const equipmentBlock = equipmentPromptBlockForPreset(preset);
+  const historyBlock = `\n\nRecent sessions — exercises and best logged sets (context only):\n${params.recentLiftDetail.trim()}`;
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
@@ -220,20 +241,19 @@ Rules:
 - Each exercise: 2-4 sets, modest extra volume on top of what they already planned.
 - rep_range like "8-12" or "6-10".
 - rest_seconds MUST be 75 for every exercise.
-- Prefer exact "name" strings from APP LIBRARY below when listed; otherwise a very close synonym the app can fuzzy-match.
+- Obey CATALOG DISCIPLINE in the APP LIBRARY block — verbatim listed names when possible.
 - Do NOT repeat movements already in today's session (see forbidden list). Prefer complementary muscle groups vs what is already done or in progress.
 - Do not propose two add-on exercises that are the same pattern (e.g. two horizontal presses).
-- Recent finished-session summary is for rotation/recovery awareness only.
 
-${equipmentAssumptionBlock()}
+${equipmentBlock}
 
 ${baseConstraints}
-Add-on rule: keep total add-on small enough to fit inside the remaining time implied by the session budget above — this is extra work at the end or between blocks, not a second workout.${profileBlock}${catalogBlock}
+Add-on rule: keep total add-on small enough to fit inside the remaining time implied by the session budget above — this is extra work at the end or between blocks, not a second workout.${historyBlock}${profileBlock}${catalogBlock}
 
 Current in-progress workout (order, completion, muscles):
 ${params.currentSessionSummary}
 
-Recent finished workouts (muscle emphasis):
+Recent finished workouts (muscle emphasis summary):
 ${params.recentMuscleSummary}
 
 Already in this session (forbidden to duplicate): ${existing}.`,

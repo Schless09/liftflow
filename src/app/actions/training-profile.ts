@@ -6,7 +6,7 @@ import {
   normalizeTrainingProfile,
 } from "@/lib/training-profile-storage";
 import { createServerSupabaseClient, isSupabaseAnonConfigured } from "@/lib/supabase/server";
-import type { TrainingGoal, TrainingProfile } from "@/lib/types";
+import type { GymEquipmentPreset, TrainingGoal, TrainingProfile } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 type ProfileRow = {
@@ -15,6 +15,7 @@ type ProfileRow = {
   goal: string;
   event_note: string | null;
   days_per_week?: number | string | null;
+  gym_equipment_preset?: string | null;
 };
 
 function rowToProfile(row: ProfileRow): TrainingProfile | null {
@@ -27,6 +28,7 @@ function rowToProfile(row: ProfileRow): TrainingProfile | null {
         ? Number(row.days_per_week)
         : 3,
     eventNote: row.event_note ?? undefined,
+    gymEquipmentPreset: (row.gym_equipment_preset ?? undefined) as GymEquipmentPreset | undefined,
   };
   if (!isValidTrainingProfile(draft)) return null;
   return normalizeTrainingProfile(draft);
@@ -40,7 +42,7 @@ export async function getTrainingProfileAction(): Promise<TrainingProfile | null
     const supabase = await createServerSupabaseClient();
     const { data, error } = await supabase
       .from("training_profiles")
-      .select("body_weight_lbs, age, goal, event_note, days_per_week")
+      .select("body_weight_lbs, age, goal, event_note, days_per_week, gym_equipment_preset")
       .maybeSingle();
 
     if (error || !data) return null;
@@ -73,6 +75,7 @@ export async function upsertTrainingProfileAction(profile: TrainingProfile): Pro
       goal: normalized.goal,
       days_per_week: normalized.daysPerWeek,
       event_note: normalized.eventNote ?? null,
+      gym_equipment_preset: normalized.gymEquipmentPreset ?? "full_gym",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },

@@ -4,8 +4,9 @@ import { parseRepRange } from "@/lib/rep-range";
 import { resolveExercise } from "@/lib/exercise-resolve";
 import { generateExtraLiftsForActiveSession } from "@/lib/gemini/workout-generate";
 import { formatExerciseCatalogForPrompt } from "@/lib/exercise-catalog-for-prompt";
+import { exerciseEquipmentMatchesPreset, resolvedGymEquipmentPreset } from "@/lib/gym-equipment-preset";
 import { nextPlannedWeight } from "@/lib/progression";
-import { summarizeRecentForPrompt } from "@/lib/muscle-format";
+import { detailedRecentLiftsForPrompt, summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { suggestWorkingWeight } from "@/lib/suggest-working-weight";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -245,13 +246,21 @@ export async function appendAiExtraLifts(workoutId: string, trainingProfilePaylo
 
   const ctx = await getWorkoutRecencyContext();
   const recentMuscleSummary = summarizeRecentForPrompt(ctx.recent);
+  const recentLiftDetail = detailedRecentLiftsForPrompt(ctx.recent);
 
   const { data: exerciseRows, error: exErr } = await supabase.from("exercises").select("*");
   if (exErr || !exerciseRows) throw new Error(exErr?.message ?? "Failed to load exercises");
   const exercises = exerciseRows as ExerciseRow[];
 
+  const preset = resolvedGymEquipmentPreset(profile);
+  const filteredCatalogRows = exercises.filter((e) =>
+    exerciseEquipmentMatchesPreset(e.equipment, preset),
+  );
+  const catalogSource =
+    filteredCatalogRows.length > 0 ? filteredCatalogRows : exercises;
+
   const catalogHint = formatExerciseCatalogForPrompt(
-    exercises.map((e) => ({ canonical_name: e.canonical_name, muscle_group: e.muscle_group })),
+    catalogSource.map((e) => ({ canonical_name: e.canonical_name, muscle_group: e.muscle_group })),
     ctx.suggestedFocus,
     2600,
   );
@@ -263,6 +272,7 @@ export async function appendAiExtraLifts(workoutId: string, trainingProfilePaylo
     feeling,
     durationMinutes,
     recentMuscleSummary,
+    recentLiftDetail,
     currentSessionSummary,
     existingExerciseNames,
     trainingProfile: profile,

@@ -1,6 +1,22 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { titleCaseGroup } from "@/lib/muscle-format";
-import type { RecentWorkoutSummary, WorkoutRecencyContext } from "@/lib/types";
+import type { RecentExerciseLog, RecentWorkoutSummary, WorkoutRecencyContext } from "@/lib/types";
+
+type SetRow = {
+  actual_weight: unknown;
+  actual_reps: unknown;
+  completed: unknown;
+};
+
+type ExerciseJoin = { muscle_group: string; canonical_name: string } | null;
+
+type WeRow = {
+  workout_id: string;
+  order_index: number;
+  unmapped_name: string | null;
+  exercises: ExerciseJoin | ExerciseJoin[] | null;
+  sets: SetRow[] | null;
+};
 
 /** Count muscle-group exposure across recent workouts (one count per exercise slot). */
 function countMuscleHits(
@@ -13,6 +29,61 @@ function countMuscleHits(
     counts.set(mg, (counts.get(mg) ?? 0) + 1);
   }
   return counts;
+}
+
+function singleExerciseJoin(raw: WeRow["exercises"]): ExerciseJoin {
+  if (!raw) return null;
+  return Array.isArray(raw) ? raw[0] ?? null : raw;
+}
+
+function formatBestEffortFromSets(sets: SetRow[] | null | undefined): string | null {
+  const done = (sets ?? []).filter(
+    (s) =>
+      s.completed === true && s.actual_reps != null && String(s.actual_reps).trim() !== "",
+  );
+  if (done.length === 0) return null;
+
+  let best = done[0]!;
+  let bestScore = -1;
+  for (const s of done) {
+    const w = Number(s.actual_weight);
+    const r = Number(s.actual_reps);
+    const wSafe = Number.isFinite(w) ? w : 0;
+    const rSafe = Number.isFinite(r) ? r : 0;
+    const score = wSafe > 0 ? wSafe * 1000 + rSafe : rSafe;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+
+  const w = Number(best.actual_weight);
+  const r = Number(best.actual_reps);
+  if (!Number.isFinite(r) || r <= 0) return null;
+
+  if (Number.isFinite(w) && w > 0) {
+    const rounded = Math.round(w * 10) / 10;
+    const ws = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    return `${ws} lb × ${r}`;
+  }
+  return `${r} reps`;
+}
+
+function exerciseLogsFromWorkoutRows(rows: WeRow[]): RecentExerciseLog[] {
+  const sorted = [...rows].sort((a, b) => a.order_index - b.order_index);
+  return sorted.map((row) => {
+    const ex = singleExerciseJoin(row.exercises);
+    const name =
+      ex?.canonical_name?.trim() ||
+      (typeof row.unmapped_name === "string" ? row.unmapped_name.trim() : "") ||
+      "Unknown";
+    const mgRaw = ex?.muscle_group?.trim() ?? null;
+    return {
+      name,
+      muscleGroup: mgRaw ? titleCaseGroup(mgRaw) : null,
+      bestEffort: formatBestEffortFromSets(row.sets),
+    };
+  });
 }
 
 export async function getWorkoutRecencyContext(): Promise<WorkoutRecencyContext> {
@@ -30,27 +101,41 @@ export async function getWorkoutRecencyContext(): Promise<WorkoutRecencyContext>
     .order("completed_at", { ascending: false })
     .limit(3);
 
-  const recent: RecentWorkoutSummary[] = [];
-  const allRecentWe: { workout_id: string; exercises: { muscle_group: string } | null }[] = [];
+  const workoutIds = (recentWorkouts ?? []).map((w) => w.id);
+  let batchWes: WeRow[] = [];
 
-  for (const w of recentWorkouts ?? []) {
+  if (workoutIds.length > 0) {
     const { data: wes } = await supabase
       .from("workout_exercises")
-      .select("workout_id, exercises(muscle_group)")
-      .eq("workout_id", w.id);
+      .select(
+        "workout_id, order_index, unmapped_name, exercises(muscle_group, canonical_name), sets(actual_weight, actual_reps, completed)",
+      )
+      .in("workout_id", workoutIds);
+    batchWes = (wes ?? []) as unknown as WeRow[];
+  }
 
-    for (const row of wes ?? []) {
-      allRecentWe.push(
-        row as unknown as {
-          workout_id: string;
-          exercises: { muscle_group: string } | null;
-        },
-      );
-    }
+  const byWorkout = new Map<string, WeRow[]>();
+  for (const row of batchWes) {
+    const wid = row.workout_id;
+    if (!byWorkout.has(wid)) byWorkout.set(wid, []);
+    byWorkout.get(wid)!.push(row);
+  }
 
+  const allRecentWe: { workout_id: string; exercises: { muscle_group: string } | null }[] = [];
+  for (const row of batchWes) {
+    const ex = singleExerciseJoin(row.exercises);
+    allRecentWe.push({
+      workout_id: row.workout_id,
+      exercises: ex?.muscle_group ? { muscle_group: ex.muscle_group } : null,
+    });
+  }
+
+  const recent: RecentWorkoutSummary[] = [];
+  for (const w of recentWorkouts ?? []) {
+    const wes = byWorkout.get(w.id) ?? [];
     const groupsSet = new Set<string>();
-    for (const row of wes ?? []) {
-      const ex = row.exercises as unknown as { muscle_group: string } | null;
+    for (const row of wes) {
+      const ex = singleExerciseJoin(row.exercises);
       if (ex?.muscle_group) groupsSet.add(ex.muscle_group);
     }
     const muscleGroups = [...groupsSet].sort((a, b) => a.localeCompare(b));
@@ -59,6 +144,7 @@ export async function getWorkoutRecencyContext(): Promise<WorkoutRecencyContext>
       name: w.name,
       completedAt: w.completed_at!,
       muscleGroups,
+      exercises: exerciseLogsFromWorkoutRows(wes),
     });
   }
 

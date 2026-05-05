@@ -1,10 +1,22 @@
-import type { TrainingProfile } from "./types";
+import type { GymEquipmentPreset, TrainingProfile } from "./types";
 
 const PROFILE_KEY = "liftflow:training-profile";
 
+export function normalizeGymEquipmentPreset(v: unknown): GymEquipmentPreset {
+  if (
+    v === "full_gym" ||
+    v === "home_gym" ||
+    v === "bodyweight_only" ||
+    v === "dumbbells_bands"
+  ) {
+    return v;
+  }
+  return "full_gym";
+}
+
 export function normalizeTrainingProfile(
   p: Pick<TrainingProfile, "bodyWeightLbs" | "age" | "goal"> &
-    Partial<Pick<TrainingProfile, "daysPerWeek" | "eventNote">>,
+    Partial<Pick<TrainingProfile, "daysPerWeek" | "eventNote" | "gymEquipmentPreset">>,
 ): TrainingProfile {
   let days = p.daysPerWeek;
   if (typeof days !== "number" || !Number.isFinite(days)) days = 3;
@@ -15,6 +27,7 @@ export function normalizeTrainingProfile(
     goal: p.goal,
     daysPerWeek: days,
     eventNote: p.eventNote?.trim() || undefined,
+    gymEquipmentPreset: normalizeGymEquipmentPreset(p.gymEquipmentPreset),
   };
 }
 
@@ -55,6 +68,17 @@ export function isValidTrainingProfile(p: unknown): p is TrainingProfile {
   if (d !== undefined && d !== null) {
     const n = Number(d);
     if (!Number.isFinite(n) || n < 1 || n > 7) return false;
+  }
+  const eq = o.gymEquipmentPreset;
+  if (eq !== undefined && eq !== null) {
+    if (
+      eq !== "full_gym" &&
+      eq !== "home_gym" &&
+      eq !== "bodyweight_only" &&
+      eq !== "dumbbells_bands"
+    ) {
+      return false;
+    }
   }
   return true;
 }

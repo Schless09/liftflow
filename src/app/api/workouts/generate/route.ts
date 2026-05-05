@@ -1,6 +1,7 @@
 import { generateWorkoutOptions } from "@/lib/gemini/workout-generate";
 import { formatExerciseCatalogForPrompt } from "@/lib/exercise-catalog-for-prompt";
-import { summarizeRecentForPrompt } from "@/lib/muscle-format";
+import { exerciseEquipmentMatchesPreset, resolvedGymEquipmentPreset } from "@/lib/gym-equipment-preset";
+import { detailedRecentLiftsForPrompt, summarizeRecentForPrompt } from "@/lib/muscle-format";
 import { parseTrainingProfileJson } from "@/lib/training-profile-storage";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getWorkoutRecencyContext } from "@/lib/workout-recency-context";
@@ -49,25 +50,36 @@ export async function POST(req: Request) {
         ? body.recentMuscleSummary.trim()
         : undefined;
 
-    if (focusMuscleGroups.length === 0 || !recentMuscleSummary) {
-      const ctx = await getWorkoutRecencyContext();
-      if (focusMuscleGroups.length === 0) {
-        focusMuscleGroups = [...ctx.suggestedFocus];
-      }
-      if (!recentMuscleSummary) {
-        recentMuscleSummary = summarizeRecentForPrompt(ctx.recent);
-      }
+    const ctx = await getWorkoutRecencyContext();
+    if (focusMuscleGroups.length === 0) {
+      focusMuscleGroups = [...ctx.suggestedFocus];
     }
+    if (!recentMuscleSummary) {
+      recentMuscleSummary = summarizeRecentForPrompt(ctx.recent);
+    }
+    const recentLiftDetail = detailedRecentLiftsForPrompt(ctx.recent);
 
     const trainingProfile = parseTrainingProfileJson(body?.trainingProfile ?? null);
     const generationMode = parseGenerationMode(body?.generationMode);
+    const preset = resolvedGymEquipmentPreset(trainingProfile);
 
     const supabase = await createServerSupabaseClient();
     const { data: catalogRows } = await supabase
       .from("exercises")
-      .select("canonical_name, muscle_group");
+      .select("canonical_name, muscle_group, equipment");
+
+    const filtered =
+      (catalogRows ?? []).filter((r) =>
+        exerciseEquipmentMatchesPreset(String(r.equipment ?? ""), preset),
+      ) ?? [];
+    const rowsForPrompt =
+      filtered.length > 0 ? filtered : (catalogRows ?? []);
+
     const exerciseCatalogHint = formatExerciseCatalogForPrompt(
-      catalogRows ?? [],
+      rowsForPrompt.map((r) => ({
+        canonical_name: r.canonical_name,
+        muscle_group: r.muscle_group,
+      })),
       focusMuscleGroups,
     );
 
@@ -76,6 +88,7 @@ export async function POST(req: Request) {
       durationMinutes,
       focusMuscleGroups,
       recentMuscleSummary,
+      recentLiftDetail,
       trainingProfile,
       generationMode,
       exerciseCatalogHint || null,

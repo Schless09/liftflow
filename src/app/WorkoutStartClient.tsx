@@ -260,6 +260,18 @@ export function WorkoutStartClient() {
                             ? `Muscle groups: ${r.muscleGroups.join(", ")}`
                             : "No mapped lifts logged (add exercises from the library next time)."}
                         </p>
+                        {r.exercises.length > 0 ? (
+                          <ul className="mt-2 space-y-0.5 border-l border-zinc-700 pl-3 text-sm text-zinc-500">
+                            {r.exercises.map((e, ei) => (
+                              <li key={`${r.id}-${ei}`}>
+                                <span className="text-zinc-400">{e.name}</span>
+                                {e.bestEffort ? (
+                                  <span className="text-zinc-500"> — {e.bestEffort}</span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </div>
                     );
                   })

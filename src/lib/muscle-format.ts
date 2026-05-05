@@ -22,3 +22,27 @@ export function summarizeRecentForPrompt(recent: RecentWorkoutSummary[]): string
     })
     .join(" · ");
 }
+
+/** Multi-line block: exercise names and best logged sets for AI planning. */
+export function detailedRecentLiftsForPrompt(recent: RecentWorkoutSummary[]): string {
+  if (recent.length === 0) {
+    return "No finished workouts in the log yet — user may be new; suggest approachable defaults.";
+  }
+  return recent
+    .map((r, i) => {
+      const label =
+        i === 0 ? "Most recent" : i === 1 ? "Previous" : i === 2 ? "Two sessions ago" : "Earlier";
+      const lines =
+        r.exercises.length > 0
+          ? r.exercises
+              .map((e) => {
+                const mg = e.muscleGroup ? ` [${e.muscleGroup}]` : "";
+                const lift = e.bestEffort ? ` — best logged set: ${e.bestEffort}` : "";
+                return `  - ${e.name}${mg}${lift}`;
+              })
+              .join("\n")
+          : "  (no mapped exercises or sets)";
+      return `${label} — "${r.name}":\n${lines}`;
+    })
+    .join("\n\n");
+}

@@ -10,7 +10,7 @@ import {
   isValidTrainingProfile,
   saveTrainingProfileToStorage,
 } from "@/lib/training-profile-storage";
-import type { TrainingGoal, TrainingProfile } from "@/lib/types";
+import type { GymEquipmentPreset, TrainingGoal, TrainingProfile } from "@/lib/types";
 import { ProgressPhotosSection } from "@/components/ProgressPhotosSection";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,11 +23,35 @@ const GOALS: { value: TrainingGoal; label: string; sub: string }[] = [
   { value: "event", label: "Train for an event", sub: "Race, meet, sport…" },
 ];
 
+const EQUIPMENT_PRESETS: { value: GymEquipmentPreset; label: string; sub: string }[] = [
+  {
+    value: "full_gym",
+    label: "Full gym",
+    sub: "Commercial gym — barbells, cables, machines",
+  },
+  {
+    value: "home_gym",
+    label: "Home gym",
+    sub: "Rack, barbell, dumbbells, bench, bands",
+  },
+  {
+    value: "dumbbells_bands",
+    label: "Dumbbells & bands",
+    sub: "No barbell — kettlebells, DBs, bands, bodyweight",
+  },
+  {
+    value: "bodyweight_only",
+    label: "Bodyweight only",
+    sub: "Calisthenics and minimal / no added load",
+  },
+];
+
 export default function ProfilePage() {
   const router = useRouter();
   const [bodyWeightLbs, setBodyWeightLbs] = useState("");
   const [age, setAge] = useState("");
   const [goal, setGoal] = useState<TrainingGoal>("maintain");
+  const [gymEquipmentPreset, setGymEquipmentPreset] = useState<GymEquipmentPreset>("full_gym");
   const [daysPerWeek, setDaysPerWeek] = useState(3);
   const [eventNote, setEventNote] = useState("");
 
@@ -44,6 +68,7 @@ export default function ProfilePage() {
           setBodyWeightLbs(String(initial.bodyWeightLbs));
           setAge(String(initial.age));
           setGoal(initial.goal);
+          setGymEquipmentPreset(initial.gymEquipmentPreset ?? "full_gym");
           setDaysPerWeek(initial.daysPerWeek);
           setEventNote(initial.eventNote ?? "");
         });
@@ -54,6 +79,7 @@ export default function ProfilePage() {
           setBodyWeightLbs(String(local.bodyWeightLbs));
           setAge(String(local.age));
           setGoal(local.goal);
+          setGymEquipmentPreset(local.gymEquipmentPreset ?? "full_gym");
           setDaysPerWeek(local.daysPerWeek);
           setEventNote(local.eventNote ?? "");
         });
@@ -73,6 +99,7 @@ export default function ProfilePage() {
       age: a,
       goal,
       daysPerWeek,
+      gymEquipmentPreset,
       eventNote: goal === "event" ? eventNote.trim() || undefined : undefined,
     };
     if (!isValidTrainingProfile(draft)) {
@@ -99,7 +126,7 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold text-white">Your profile</h1>
       <p className="mt-2 text-sm text-zinc-400">
         Used for starter weights when you don&apos;t have a prior log for a lift, and to steer AI
-        workout style. Not medical advice.
+        workout style and equipment. Not medical advice.
       </p>
 
       <label className="mt-8 block text-sm text-zinc-400">
@@ -125,6 +152,29 @@ export default function ProfilePage() {
           placeholder="e.g. 32"
         />
       </label>
+
+      <p className="mt-6 text-sm font-medium text-zinc-300">Where you train</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        AI picks moves that match your setup. Exercises are filtered to your catalog when possible.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        {EQUIPMENT_PRESETS.map((eq) => (
+          <button
+            key={eq.value}
+            type="button"
+            onClick={() => setGymEquipmentPreset(eq.value)}
+            className={cn(
+              "flex min-h-12 flex-col items-start rounded-xl px-4 py-3 text-left",
+              gymEquipmentPreset === eq.value
+                ? "bg-emerald-900/40 ring-1 ring-emerald-600/60"
+                : "bg-zinc-800",
+            )}
+          >
+            <span className="font-medium text-white">{eq.label}</span>
+            <span className="text-xs text-zinc-500">{eq.sub}</span>
+          </button>
+        ))}
+      </div>
 
       <p className="mt-6 text-sm font-medium text-zinc-300">Primary goal</p>
       <div className="mt-3 flex flex-col gap-2">

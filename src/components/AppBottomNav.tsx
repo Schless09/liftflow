@@ -68,7 +68,7 @@ export function AppBottomNav() {
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-800/90 bg-zinc-950/95 backdrop-blur-md",
+        "fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-800/90 bg-zinc-950/95 backdrop-blur-md",
         "pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1",
       )}
       aria-label="Main navigation"

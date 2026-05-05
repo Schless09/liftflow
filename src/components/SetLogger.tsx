@@ -58,10 +58,10 @@ export function SetLogger({
   const timeBased = repRangeIsTimeBased(repRange);
   const repCap = timeBased ? 600 : REP_MAX;
 
-  const clampRepsVal = (n: number) => {
+  const clampRepsVal = useCallback((n: number) => {
     if (!Number.isFinite(n)) return REP_MIN;
     return Math.min(repCap, Math.max(REP_MIN, Math.round(n)));
-  };
+  }, [repCap]);
 
   const formatRepsDisplay = (n: number) => String(clampRepsVal(n));
 
@@ -80,15 +80,17 @@ export function SetLogger({
 
   useEffect(() => {
     if (!open) return;
-    setWeightVal(clampWeight(Number(defaultWeight) || 0));
-    setWeightDraft(null);
-    const r =
-      initialRepsOverride != null && Number.isFinite(Number(initialRepsOverride))
-        ? clampRepsVal(Number(initialRepsOverride))
-        : mid;
-    setRepsVal(r);
-    setRepsDraft(null);
-  }, [open, defaultWeight, initialRepsOverride, mid, repRange]);
+    queueMicrotask(() => {
+      setWeightVal(clampWeight(Number(defaultWeight) || 0));
+      setWeightDraft(null);
+      const r =
+        initialRepsOverride != null && Number.isFinite(Number(initialRepsOverride))
+          ? clampRepsVal(Number(initialRepsOverride))
+          : mid;
+      setRepsVal(r);
+      setRepsDraft(null);
+    });
+  }, [open, defaultWeight, initialRepsOverride, mid, clampRepsVal, repRange]);
 
   const resetAndClose = useCallback(() => {
     setWeightVal(clampWeight(Number(defaultWeight) || 0));
@@ -134,12 +136,13 @@ export function SetLogger({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="set-logger-title"
     >
-      <div className="w-full max-w-lg rounded-t-3xl bg-zinc-900 p-6 shadow-xl sm:rounded-3xl">
+      <div className="flex max-h-[min(92dvh,100%)] w-full max-w-lg flex-col rounded-t-3xl bg-zinc-900 shadow-xl sm:max-h-[85vh] sm:rounded-3xl">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <h2 id="set-logger-title" className="text-center text-lg font-medium text-white">
           {sheetTitle}
         </h2>
@@ -269,6 +272,7 @@ export function SetLogger({
         >
           Cancel
         </button>
+        </div>
       </div>
     </div>
   );

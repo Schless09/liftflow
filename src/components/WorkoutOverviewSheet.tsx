@@ -2,9 +2,26 @@
 
 import { cn } from "@/lib/cn";
 import type { WorkoutDetailDto } from "@/lib/db-types";
+import { exerciseAnimationSrc } from "@/lib/exercise-display-media";
 import { repRangeIsTimeBased } from "@/lib/rep-range";
 import { useEscapeKey } from "@/lib/use-escape-key";
+import type { MutableRefObject } from "react";
 import { useRef } from "react";
+
+function runOnDoubleTap(
+  tapRef: MutableRefObject<{ id: string; t: number } | null>,
+  setId: string,
+  fn: () => void,
+) {
+  const now = Date.now();
+  const prev = tapRef.current;
+  if (prev && prev.id === setId && now - prev.t < 360) {
+    fn();
+    tapRef.current = null;
+  } else {
+    tapRef.current = { id: setId, t: now };
+  }
+}
 
 type Props = {
   open: boolean;
@@ -43,20 +60,9 @@ export function WorkoutOverviewSheet({
 
   const exercises = [...(workout.workout_exercises ?? [])].sort((a, b) => a.order_index - b.order_index);
 
-  const handleRowActivate = (setId: string, fn: () => void) => {
-    const now = Date.now();
-    const prev = tapRef.current;
-    if (prev && prev.id === setId && now - prev.t < 360) {
-      fn();
-      tapRef.current = null;
-    } else {
-      tapRef.current = { id: setId, t: now };
-    }
-  };
-
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-black/75 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="workout-overview-title"
@@ -74,7 +80,7 @@ export function WorkoutOverviewSheet({
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <p className="mb-3 text-xs text-zinc-500">
             Completed sets: double-tap a row (or double-click) to edit weight{" "}
             <span className="text-zinc-600">·</span> reps.
@@ -88,14 +94,37 @@ export function WorkoutOverviewSheet({
           <div className="space-y-6">
             {exercises.map((we, wi) => {
               const name = we.exercises?.canonical_name ?? we.unmapped_name ?? "Exercise";
+              const gifUrl = exerciseAnimationSrc({
+                canonicalName: we.exercises?.canonical_name,
+                unmappedName: we.unmapped_name,
+                storedGifUrl: we.exercises?.gif_url,
+              });
               const timeBased = repRangeIsTimeBased(we.rep_range);
               const setsSorted = [...(we.sets ?? [])].sort((a, b) => a.set_number - b.set_number);
               return (
                 <div key={we.id}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{name}</p>
-                      <p className="text-xs text-zinc-500">{we.rep_range}</p>
+                    <div className="flex min-w-0 flex-1 gap-3">
+                      <div className="relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-zinc-800 sm:h-20 sm:w-20">
+                        {gifUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- external GIF URLs
+                          <img
+                            src={gifUrl}
+                            alt={`${name} demo`}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full items-center justify-center px-1 text-center text-[10px] text-zinc-600">
+                            No preview
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">{name}</p>
+                        <p className="text-xs text-zinc-500">{we.rep_range}</p>
+                      </div>
                     </div>
                     {canRemoveExercises ? (
                       <button
@@ -123,7 +152,7 @@ export function WorkoutOverviewSheet({
                             aria-disabled={!done}
                             onClick={() => {
                               if (!done) return;
-                              handleRowActivate(s.id, () =>
+                              runOnDoubleTap(tapRef, s.id, () =>
                                 onEditCompleted({
                                   setId: s.id,
                                   workoutExerciseId: we.id,

@@ -11,9 +11,11 @@ export default function WorkoutPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    setErr(null);
     getActiveWorkoutSummary()
-      .then(setActive)
+      .then((a) => {
+        setErr(null);
+        setActive(a);
+      })
       .catch((e) => {
         setActive(null);
         setErr(e instanceof Error ? e.message : "Could not load session");

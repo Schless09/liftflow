@@ -160,7 +160,7 @@ export function RestTimer({ active, initialSeconds, onComplete, onSkip }: Props)
   return (
     <>
       {overlayVisible ? (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-[45]">
           <button
             type="button"
             className="absolute inset-0 bg-black/85"
@@ -184,7 +184,7 @@ export function RestTimer({ active, initialSeconds, onComplete, onSkip }: Props)
         </div>
       ) : (
         <div
-          className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 border-t border-zinc-700/90 bg-zinc-950/95 px-4 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          className="fixed bottom-0 left-0 right-0 z-[45] flex items-center gap-3 border-t border-zinc-700/90 bg-zinc-950/95 px-4 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           role="status"
           aria-label={`Rest timer, ${label} left. Tap left to expand.`}
         >

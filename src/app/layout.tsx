@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { AppShell } from "@/components/AppShell";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
@@ -31,15 +31,6 @@ export default function RootLayout({
     <html lang="en" className={`${dmSans.variable} h-full bg-zinc-950 antialiased`}>
       <body className={`${dmSans.className} flex min-h-dvh flex-col text-zinc-100`}>
         <ClerkProvider signInUrl="/sign-in" signUpUrl="/sign-up" afterSignOutUrl="/sign-in">
-          <header className="flex shrink-0 items-center justify-end gap-2 border-b border-zinc-800 px-4 py-3">
-            <Show when="signed-out">
-              <SignInButton />
-              <SignUpButton />
-            </Show>
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
-          </header>
           <AppShell>{children}</AppShell>
         </ClerkProvider>
       </body>

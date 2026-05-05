@@ -30,9 +30,11 @@ export function ProgressPhotosSection() {
   const [pending, startTransition] = useTransition();
 
   const load = useCallback(() => {
-    setLoadErr(null);
     listProgressPhotos()
-      .then(setPhotos)
+      .then((list) => {
+        setLoadErr(null);
+        setPhotos(list);
+      })
       .catch((e) => {
         setPhotos([]);
         setLoadErr(e instanceof Error ? e.message : "Could not load photos");

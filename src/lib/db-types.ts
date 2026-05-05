@@ -36,5 +36,7 @@ export type WorkoutDetailDto = {
   duration_minutes: number | null;
   completed_at: string | null;
   created_at?: string;
+  /** Saved when workout is finalized; may be absent on older rows. */
+  total_volume?: number | null;
   workout_exercises: WorkoutExerciseDto[];
 };

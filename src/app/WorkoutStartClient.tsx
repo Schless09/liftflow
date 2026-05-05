@@ -12,16 +12,30 @@ import type {
 } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 const DRAFT_KEY = "liftflow:draft";
 
 type Step = "feeling" | "duration" | "context";
 
+function clientMountedSubscribe() {
+  return () => {};
+}
+function clientMountedSnapshot() {
+  return true;
+}
+function clientMountedServerSnapshot() {
+  return false;
+}
+
 /** New workout wizard: feeling → duration → context → AI pick (`/pick`). */
 export function WorkoutStartClient() {
   const router = useRouter();
-  const [hasMounted, setHasMounted] = useState(false);
+  const hasMounted = useSyncExternalStore(
+    clientMountedSubscribe,
+    clientMountedSnapshot,
+    clientMountedServerSnapshot,
+  );
   const [step, setStep] = useState<Step>("feeling");
   const [feeling, setFeeling] = useState<Feeling | null>(null);
   const [durationMinutes, setDurationMinutes] = useState<WorkoutDurationMinutes | null>(null);
@@ -30,10 +44,6 @@ export function WorkoutStartClient() {
   const [generateBusy, setGenerateBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [trainingProfile, setTrainingProfile] = useState<TrainingProfile | null | undefined>(undefined);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

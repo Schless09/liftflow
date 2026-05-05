@@ -1,6 +1,8 @@
 "use client";
 
-import { finishWorkout } from "@/app/actions/workout";
+import { finishWorkout, getWorkoutDetail } from "@/app/actions/workout";
+import type { WorkoutDetailDto } from "@/lib/db-types";
+import { CompletedWorkoutDetail } from "@/components/CompletedWorkoutDetail";
 import type { FinishWorkoutSummary } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
@@ -28,6 +30,7 @@ function encouragementLine(diff: number | null): string {
 
 export function EndClient({ workoutId }: Props) {
   const [summary, setSummary] = useState<FinishWorkoutSummary | null>(null);
+  const [detail, setDetail] = useState<WorkoutDetailDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +41,13 @@ export function EndClient({ workoutId }: Props) {
         if (!cancelled) setSummary(result);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to finalize");
+        return;
+      }
+      try {
+        const w = await getWorkoutDetail(workoutId);
+        if (!cancelled) setDetail(w);
+      } catch {
+        /* Breakdown is optional */
       }
     })();
     return () => {
@@ -259,6 +269,10 @@ export function EndClient({ workoutId }: Props) {
           </>
         )}
       </div>
+
+      {detail?.completed_at ? (
+        <CompletedWorkoutDetail workout={detail} variant="embedded" />
+      ) : null}
 
       <div className="relative mt-10 flex flex-col gap-3">
         <Link

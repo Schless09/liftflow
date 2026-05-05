@@ -25,9 +25,11 @@ export function HomeHistoryClient() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    setErr(null);
     listWorkoutHistory(50)
-      .then(setRows)
+      .then((r) => {
+        setErr(null);
+        setRows(r);
+      })
       .catch((e) => {
         setRows([]);
         setErr(e instanceof Error ? e.message : "Could not load workouts");
@@ -69,7 +71,7 @@ export function HomeHistoryClient() {
         <ul className="mt-8 flex flex-col gap-3">
           {rows.map((w) => {
             const done = w.completed_at != null;
-            const href = done ? `/workout/${w.id}/end` : `/workout/${w.id}`;
+            const href = done ? `/workout/${w.id}/summary` : `/workout/${w.id}`;
             return (
               <li key={w.id}>
                 <Link

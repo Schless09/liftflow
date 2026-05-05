@@ -11,6 +11,8 @@ export type ExerciseRow = {
   equipment: string;
   gif_url: string | null;
   default_rest_seconds: number;
+  /** ExerciseDB OSS v1 id when present (seed from https://oss.exercisedb.dev). */
+  exercisedb_oss_id?: string | null;
 };
 
 export type WorkoutExercisePlan = {

@@ -22,6 +22,8 @@ import type {
   WorkoutDurationMinutes,
   WorkoutExercisePlan,
 } from "@/lib/types";
+import type { WorkoutDetailDto } from "@/lib/db-types";
+import { fetchWorkoutDetail } from "@/lib/fetch-workout-detail";
 import {
   ABS_FINISHER_5_MIN,
   ABS_FINISHER_8_MIN,
@@ -710,6 +712,12 @@ export async function getActiveWorkoutSummary(): Promise<{ id: string; name: str
   return { id: data.id, name: data.name };
 }
 
+/** Full workout graph for read-only summary / recap screens. */
+export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetailDto | null> {
+  const supabase = await createServerSupabaseClient();
+  return fetchWorkoutDetail(supabase, workoutId);
+}
+
 export async function finishWorkout(workoutId: string): Promise<FinishWorkoutSummary> {
   const supabase = await createServerSupabaseClient();
 
@@ -791,6 +799,7 @@ export async function finishWorkout(workoutId: string): Promise<FinishWorkoutSum
     .eq("id", workoutId);
 
   revalidatePath(`/workout/${workoutId}/end`);
+  revalidatePath(`/workout/${workoutId}/summary`);
   revalidatePath("/");
   revalidatePath("/workout");
   return buildFinishSummary(volume, prev?.total_volume != null ? Number(prev.total_volume) : null, {

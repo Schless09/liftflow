@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:exercise-seed": "node scripts/generate-exercise-seed-from-oss.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.2.9",

@@ -14,7 +14,7 @@ import {
 import type { WorkoutDetailDto } from "@/lib/db-types";
 import { loadTrainingProfileMerged } from "@/lib/training-profile-load";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { exerciseGifFallbackUrl } from "@/lib/exercise-gif-fallback";
+import { exerciseAnimationSrc } from "@/lib/exercise-display-media";
 import { ABS_FINISHER_REST_SEC } from "@/lib/abs-finisher";
 import { DEFAULT_REST_BETWEEN_SETS_SEC } from "@/lib/rest-constants";
 import type { ExerciseRow, LiftHistoryEntry, TrainingProfile } from "@/lib/types";
@@ -132,8 +132,8 @@ export function ActiveWorkout({ workout }: Props) {
     (sessionDone || (pastAbsOfferThreshold && !absOfferDeferred));
 
   useEffect(() => {
-    setAbsOfferDeferred(false);
     queueMicrotask(() => {
+      setAbsOfferDeferred(false);
       try {
         const v = localStorage.getItem(FINISHER_LS_KEY(sorted.id));
         if (v === "skip" || v === "appended") setFinisherLs(v);
@@ -201,8 +201,11 @@ export function ActiveWorkout({ workout }: Props) {
   const setRow = we && cursor ? we.sets[cursor.setIdx] : null;
 
   const title = we?.exercises?.canonical_name ?? we?.unmapped_name ?? "Exercise";
-  const gifUrl =
-    we?.exercises?.gif_url ?? exerciseGifFallbackUrl(we?.exercises?.canonical_name) ?? null;
+  const gifUrl = exerciseAnimationSrc({
+    canonicalName: we?.exercises?.canonical_name,
+    unmappedName: we?.unmapped_name,
+    storedGifUrl: we?.exercises?.gif_url,
+  });
   const lastLine =
     we?.base_weight != null && we.last_session_reps != null
       ? `Last time: ${we.base_weight} × ${we.last_session_reps}`
@@ -617,19 +620,24 @@ export function ActiveWorkout({ workout }: Props) {
 
       {swapOpen ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="swap-sheet-title"
         >
-          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-zinc-900 p-6 sm:rounded-3xl">
-            <p id="swap-sheet-title" className="text-lg font-semibold text-white">
-              Swap exercise
-            </p>
-            <div className="mt-4 flex flex-col gap-3">
+          <div className="flex max-h-[min(90dvh,100%)] w-full max-w-lg flex-col rounded-t-3xl bg-zinc-900 shadow-xl sm:max-h-[85vh] sm:rounded-3xl">
+            <div className="shrink-0 border-b border-zinc-800 px-6 py-4">
+              <p id="swap-sheet-title" className="text-lg font-semibold text-white">
+                Swap exercise
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              <div className="flex flex-col gap-3">
               {alternatives.map((ex) => {
-                const altGif =
-                  ex.gif_url ?? exerciseGifFallbackUrl(ex.canonical_name) ?? null;
+                const altGif = exerciseAnimationSrc({
+                  canonicalName: ex.canonical_name,
+                  storedGifUrl: ex.gif_url,
+                });
                 return (
                   <button
                     key={ex.id}
@@ -679,6 +687,7 @@ export function ActiveWorkout({ workout }: Props) {
               >
                 Cancel
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -686,18 +695,19 @@ export function ActiveWorkout({ workout }: Props) {
 
       {mapOpen ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="map-sheet-title"
         >
-          <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-3xl bg-zinc-900 sm:rounded-3xl">
-            <div className="border-b border-zinc-800 p-4">
+          <div className="flex max-h-[min(90dvh,100%)] w-full max-w-lg flex-col rounded-t-3xl bg-zinc-900 shadow-xl sm:max-h-[85vh] sm:rounded-3xl">
+            <div className="shrink-0 border-b border-zinc-800 p-4">
               <p id="map-sheet-title" className="font-semibold text-white">
                 Choose exercise
               </p>
             </div>
-            <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              <div className="flex flex-col gap-3">
               <select
                 className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white"
                 value={pickId}
@@ -734,6 +744,7 @@ export function ActiveWorkout({ workout }: Props) {
               >
                 Cancel
               </button>
+              </div>
             </div>
           </div>
         </div>

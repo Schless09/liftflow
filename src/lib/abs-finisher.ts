@@ -1,21 +1,21 @@
-/** Bodyweight-friendly circuit names — must match `exercises.canonical_name` in seed. */
+/** Bodyweight-friendly circuit names — must match `exercises.canonical_name` in OSS seed. */
 export const ABS_FINISHER_5_MIN = [
-  "Bicycle Crunch",
-  "Crunch",
+  "Band Bicycle Crunch",
+  "Crunch Floor",
   "Reverse Crunch",
-  "Lying Leg Raise",
+  "Lying Leg Raise Flat Bench",
   "Dead Bug",
 ] as const;
 
 export const ABS_FINISHER_8_MIN = [
-  "Bicycle Crunch",
-  "Crunch",
+  "Band Bicycle Crunch",
+  "Crunch Floor",
   "Reverse Crunch",
-  "Lying Leg Raise",
+  "Lying Leg Raise Flat Bench",
   "Dead Bug",
   "Russian Twist",
-  "Oblique Crunch",
-  "Decline Sit Up",
+  "Oblique Crunches Floor",
+  "Decline Sit-up",
 ] as const;
 
 /** Between moves in the finisher (seconds). */
